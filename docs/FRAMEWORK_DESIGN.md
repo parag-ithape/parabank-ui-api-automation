@@ -873,7 +873,7 @@ public class Hooks {
     /** Every scenario: log lines carry the scenario name, so parallel output stays readable. */
     @Before(order = 0)
     public void nameLogLines(Scenario scenario) {
-        ThreadContext.put("scenario", scenario.getName().replaceAll("\W+", "_"));
+        ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_"));
     }
 
     /** API-only scenarios never open a browser, so they stay fast. */
