@@ -326,7 +326,8 @@ parabank-ui-api-automation/
         </dependencies>
       </plugin>
 
-      <!-- Allure: mvn allure:serve (local) / mvn allure:report (CI) -->
+      <!-- Allure: mvn allure:report builds ONE self-contained file, target/allure-report/index.html,
+           that opens by double-click (no web server; allure:serve fails on some Windows setups). -->
       <plugin>
         <groupId>io.qameta.allure</groupId>
         <artifactId>allure-maven</artifactId>
@@ -334,6 +335,8 @@ parabank-ui-api-automation/
         <configuration>
           <reportVersion>2.46.2</reportVersion>
           <resultsDirectory>${allure.results.directory}</resultsDirectory>
+          <reportDirectory>${project.build.directory}/allure-report</reportDirectory>
+          <singleFile>true</singleFile>
         </configuration>
       </plugin>
     </plugins>
@@ -1283,13 +1286,12 @@ Every run produces two reports; the run summary in the console prints where they
 | Report | How to open | Best for |
 |---|---|---|
 | **Cucumber HTML** `target/cucumber-report.html` | Double-click the file (one self-contained file, no server) | Quick look, attaching to an email or ticket: features, scenarios, steps in green/red, failure screenshots embedded |
-| **Allure** | `mvn allure:serve` (builds it and opens it in the browser; Ctrl+C to stop) | Analysis: trends, categories of failures, environment, timings, page source and API calls per step |
+| **Allure** `target/allure-report/index.html` | `mvn allure:report`, then double-click the file (built as one self-contained file: `singleFile` in `pom.xml`) | Analysis: categories of failures, environment, timeline, timings, page source and API calls per step |
 
 ```bash
-mvn allure:serve      # local: builds the Allure report and opens it in a browser
-mvn allure:report     # CI: writes static HTML to target/site/allure-maven-plugin
+mvn allure:report     # writes target/allure-report/index.html (one file, opens without a server)
 ```
-> The static Allure HTML can't be opened by double-clicking `index.html` (browsers block it as a file); use `allure:serve`, or publish it to GitHub Pages (§19).
+> `mvn allure:serve` is **not** used: on Windows its built-in web server fails to start (process exit -1073741502, verified 2026-11-14), and the single-file report makes a server unnecessary. The first `allure:report` downloads the Allure tool into `.allure/` (git-ignored).
 
 ---
 
@@ -1371,13 +1373,13 @@ jobs:
 
       - name: Build Allure report
         if: always()
-        run: mvn -B allure:report
+        run: mvn -B allure:report                # target/allure-report/index.html
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-report-${{ matrix.browser }}
-          path: target/site/allure-maven-plugin
+          path: target/allure-report
   # A follow-up job publishes the Chrome report to GitHub Pages (actions/upload-pages-artifact + actions/deploy-pages).
   # That Pages URL is the public report link in the README (showcase item S7, §23).
 ```
@@ -1471,8 +1473,9 @@ mvn clean test -Dcucumber.features="src/test/resources/features/login.feature"
 # Re-run only the scenarios that failed last time
 mvn test -Dcucumber.features="@target/rerun.txt"
 
-# Report
-mvn allure:serve
+# Reports (paths are also printed at the end of every run)
+start target/cucumber-report.html                  # Cucumber report
+mvn allure:report                                  # Allure report → target/allure-report/index.html
 ```
 
 > If a scenario needs a secret, set it first, e.g. on Linux/macOS: `export PARABANK_PASSWORD=…`, or in PowerShell: `$env:PARABANK_PASSWORD="…"`.

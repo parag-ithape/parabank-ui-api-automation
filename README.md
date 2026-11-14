@@ -73,7 +73,7 @@ The target environment is the public ParaBank site by default (`env-public.prope
 After a run, the console summary shows where the reports are:
 
 - **Cucumber report:** double-click `target/cucumber-report.html`. Every feature, scenario and step, with screenshots of failures.
-- **Allure report:** run `mvn allure:serve`. It opens in your browser with charts, failure categories and full details per step (Ctrl+C to stop).
+- **Allure report:** run `mvn allure:report`, then double-click `target/allure-report/index.html`. Charts, failure categories, timeline and full details per step.
 
 ## Related projects
 

@@ -163,7 +163,8 @@
         </dependencies>
       </plugin>
 
-      <!-- Allure: mvn allure:serve (local) / mvn allure:report (CI) -->
+      <!-- Allure: mvn allure:report builds ONE self-contained file, target/allure-report/index.html,
+           that opens by double-click (no web server; allure:serve fails on some Windows setups). -->
       <plugin>
         <groupId>io.qameta.allure</groupId>
         <artifactId>allure-maven</artifactId>
@@ -171,6 +172,8 @@
         <configuration>
           <reportVersion>2.46.2</reportVersion>
           <resultsDirectory>${allure.results.directory}</resultsDirectory>
+          <reportDirectory>${project.build.directory}/allure-report</reportDirectory>
+          <singleFile>true</singleFile>
         </configuration>
       </plugin>
     </plugins>

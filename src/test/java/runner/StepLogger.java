@@ -108,7 +108,8 @@ public class StepLogger implements ConcurrentEventListener {
             LOG.error("          FAILED: {}", failure);
         }
         LOG.info("REPORTS   Cucumber: {}", Path.of("target", "cucumber-report.html").toAbsolutePath());
-        LOG.info("          Allure:   run  mvn allure:serve");
+        LOG.info("          Allure:   run  mvn allure:report  then open {}",
+                Path.of("target", "allure-report", "index.html").toAbsolutePath());
         LOG.info(LINE);
     }
 
