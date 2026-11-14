@@ -3,6 +3,8 @@ package pages;
 import io.qameta.allure.Step;
 import org.openqa.selenium.By;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /** Registration form (register.htm). */
@@ -21,6 +23,7 @@ public class RegisterPage extends BasePage {
     private final By confirmPassword = loc.by("confirmPassword.input");
     private final By registerButton = loc.by("register.button");
     private final By welcomeText = loc.by("welcome.text");
+    private final By fieldErrors = loc.by("field.errors");
 
     public RegisterPage() {
         super("register");
@@ -52,6 +55,7 @@ public class RegisterPage extends BasePage {
         actions.typeSecret(password, customer.password());
         actions.typeSecret(confirmPassword, confirmation);
         actions.click(registerButton);
+        actions.waitPageReady();
         return this;
     }
 
@@ -72,6 +76,18 @@ public class RegisterPage extends BasePage {
      */
     public String getFieldError(String fieldName) {
         return actions.text(loc.by(fieldKey(fieldName) + ".error"));
+    }
+
+    /**
+     * Everything the page shows that explains a refused registration: field errors and ParaBank's
+     * error panel, e.g. "This username already exists." Empty when there is nothing.
+     */
+    public String describeErrorsShown() {
+        List<String> problems = new ArrayList<>(actions.visibleTexts(fieldErrors));
+        if (problems.isEmpty() && isErrorShown()) {       // ParaBank's "Error!" page has no field errors
+            problems.add(getErrorText());
+        }
+        return String.join("; ", problems);
     }
 
     /** True while the form is still shown, e.g. after the registration was refused. */

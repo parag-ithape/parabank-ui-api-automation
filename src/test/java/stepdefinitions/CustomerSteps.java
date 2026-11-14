@@ -7,6 +7,7 @@ import pages.BankCustomer;
 import pages.LeftMenuComponent;
 import pages.LoginPage;
 import pages.RegisterPage;
+import utils.FrameworkException;
 import utils.ScenarioContext;
 
 /**
@@ -29,8 +30,14 @@ public class CustomerSteps {
         if (customer == null) {
             customer = BankCustomer.generate();
             LOG.info("Registering a new customer \"{}\" for this test run", customer.username());
-            new RegisterPage().open().register(customer);
-            new LeftMenuComponent().logOut();       // registration logs in; start the scenario logged out
+            RegisterPage page = new RegisterPage().open().register(customer);
+            LeftMenuComponent menu = new LeftMenuComponent();
+            if (!menu.isLoaded()) {                 // registration logs the customer in; no menu = refused
+                throw new FrameworkException("Could not register the test customer \"" + customer.username()
+                        + "\". Page title: \"" + page.getPageTitle() + "\". Shown on the page: \""
+                        + page.describeErrorsShown() + "\"");
+            }
+            menu.logOut();                          // start the scenario logged out
             REGISTERED.set(customer);
         } else {
             LOG.info("Using customer \"{}\", registered earlier in this run", customer.username());

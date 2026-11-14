@@ -116,6 +116,19 @@ public class Actions {
         LOG.info("Choose option with value \"{}\" in {}", value, Locators.nameOf(by));
     }
 
+    /** Texts of all VISIBLE matching elements (empty list if none). Never waits, never throws. */
+    public List<String> visibleTexts(By by) {
+        try {
+            return driver.findElements(by).stream()
+                    .filter(WebElement::isDisplayed)
+                    .map(e -> e.getText().trim())
+                    .filter(text -> !text.isEmpty())
+                    .toList();
+        } catch (StaleElementReferenceException e) {
+            return List.of();
+        }
+    }
+
     public List<String> optionTexts(By by) {
         return new Select(waitVisible(by)).getOptions().stream().map(WebElement::getText).toList();
     }
