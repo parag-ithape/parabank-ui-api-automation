@@ -20,10 +20,13 @@ Feature: Customer login and logout
     When they log in without a username and password
     Then they are asked to enter a username and password
 
-  @LOG-04
+  # Known ParaBank defect: overview.htm after logout answers HTTP 500 "An internal error has occurred"
+  # instead of a normal login page. Excluded from the default run; see README "Findings".
+  @LOG-04 @knownIssue
   Scenario: After logging out, account pages are no longer available
     Given a registered customer who is logged in
     When they log out
     And they open the accounts overview page directly
     Then the login form is shown
+    And no error page is shown
     And no account data is visible

@@ -197,6 +197,8 @@ parabank-ui-api-automation/
 
     <!-- ===== Runtime defaults (all overridable with -D on the command line) ===== -->
     <env>public</env>
+    <!-- Default scenario filter; any -Dcucumber.filter.tags="..." replaces it -->
+    <cucumber.filter.tags>not @knownIssue and not @wip</cucumber.filter.tags>
     <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
   </properties>
 
@@ -313,6 +315,7 @@ parabank-ui-api-automation/
           </argLine>
           <systemPropertyVariables>
             <env>${env}</env>
+            <cucumber.filter.tags>${cucumber.filter.tags}</cucumber.filter.tags>
             <allure.results.directory>${allure.results.directory}</allure.results.directory>
           </systemPropertyVariables>
           <!-- In CI, pass -Dmaven.test.failure.ignore=true so the report step still runs -->
@@ -1007,7 +1010,7 @@ Feature: Bill pay
 | `@smoke` | Critical paths, under 5 minutes, run on every push |
 | `@regression` | Full suite, nightly |
 | `@wip` | Work in progress, excluded by default |
-| `@knownIssue` | App behaviour differs from the expected rule; documented, excluded by default |
+| `@knownIssue` | App behaviour differs from the expected rule; documented in README "Findings", excluded by default (`pom.xml` default filter `not @knownIssue and not @wip`) |
 | `@TRF-02`, `@LOG-01` … | Test-case ID from `docs/TEST_PLAN.md`: every scenario carries its ID, so each requirement traces to a test and back |
 
 ---
@@ -1457,8 +1460,11 @@ jobs:
 # Smoke against the public ParaBank site, Chrome, headed
 mvn clean test -Dcucumber.filter.tags="@smoke"
 
-# Everything except work in progress and known issues
+# Everything except work in progress and known issues (this is also the default when no tags are given)
 mvn clean test -Dcucumber.filter.tags="not @wip and not @knownIssue"
+
+# Only the known ParaBank defects (these fail on purpose; see README "Findings")
+mvn clean test -Dcucumber.filter.tags="@knownIssue"
 
 # API scenarios only (no browser, fastest)
 mvn clean test -Dcucumber.filter.tags="@api and not @ui"

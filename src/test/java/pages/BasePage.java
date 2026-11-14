@@ -48,6 +48,16 @@ public abstract class BasePage {
         driver.get(url);
     }
 
+    /** True if the right-hand panel shows an error (validation message or ParaBank's "Error!" page). Never throws. */
+    public boolean isErrorShown() {
+        return actions.isDisplayed(common.by("error.panel"));
+    }
+
+    /** Text of the error in the right-hand panel; call only when isErrorShown() is true. */
+    public String getErrorText() {
+        return actions.text(common.by("error.panel"));
+    }
+
     /** Title in the right-hand panel (h1.title). */
     public String getPageTitle() {
         return actions.text(common.by("page.title"));

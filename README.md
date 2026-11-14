@@ -64,9 +64,18 @@ mvn test -Dcucumber.filter.tags="@ui"
 mvn test -Dcucumber.filter.tags="@api"
 ```
 
-Scenarios run one after another in a single visible Chrome window, and the console shows each scenario, step and action in plain language, with a summary at the end. Add `-Dheadless=true` to hide the browser, or `-DdpThreads=2` to run 2 scenarios at a time.
+By default, scenarios tagged `@knownIssue` (known ParaBank defects, see Findings) and `@wip` are skipped. Scenarios run one after another in a single visible Chrome window, and the console shows each scenario, step and action in plain language, with a summary at the end. Add `-Dheadless=true` to hide the browser, or `-DdpThreads=2` to run 2 scenarios at a time.
 
 The target environment is the public ParaBank site by default (`env-public.properties`). For a local Docker instance run `docker run -d -p 8080:8080 parasoft/parabank`, then add `-Plocal` to the mvn command.
+
+## Findings
+
+Defects found in ParaBank while automating. Scenarios that expose them are tagged `@knownIssue`: the expectation is kept (the test fails on ParaBank), and they are left out of the default run. Run them with `mvn clean test "-Dcucumber.filter.tags=@knownIssue"`.
+
+| # | Where | Expected | Actual | Test |
+| --- | --- | --- | --- | --- |
+| 1 | Open the accounts overview after logging out | Login page | HTTP 500 page: "Error! An internal error has occurred and has been logged." (no account data is shown) | LOG-04 `@knownIssue` |
+| 2 | Register with a username longer than 20 characters | A clear "username too long" message | "This username already exists." (misleading) | Found while building test data; generated usernames stay at 20 characters or fewer |
 
 ## Reports
 

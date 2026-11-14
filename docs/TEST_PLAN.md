@@ -49,7 +49,7 @@ Loan decisions depend on the bank's configured loan processor (available funds, 
 | LOG-01 | Login | Log in with valid credentials | UI | Positive | P1 | Accounts overview shown |
 | LOG-02 | Login | Log in with wrong password | UI | Negative | P1 | Credentials-not-verified error |
 | LOG-03 | Login | Log in with empty username and password | UI | Negative | P2 | Enter-username-and-password error |
-| LOG-04 | Logout | Log out, then open an account page directly | UI | Security | P2 | Login page shown; account data not visible |
+| LOG-04 | Logout | Log out, then open an account page directly | UI | Security | P2 | Login page shown, no error page; account data not visible |
 | LOG-05 | Login | API login with valid credentials | API | Positive | P1 | 200; customer ID, first and last name match registration |
 | LOG-06 | Login | API login with invalid credentials | API | Negative | P2 | Error response; no customer data |
 | FGT-01 | Forgot login | Recover login with correct name, address and SSN | UI | Positive | P3 | Username and password shown |

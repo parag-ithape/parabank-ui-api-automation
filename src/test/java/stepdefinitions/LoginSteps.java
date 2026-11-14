@@ -70,6 +70,15 @@ public class LoginSteps {
                 .isTrue();
     }
 
+    @Then("no error page is shown")
+    public void noErrorPageIsShown() {
+        LoginPage page = new LoginPage();
+        String shown = page.isErrorShown() ? page.getErrorText() : "";
+        assertThat(shown)
+                .as("Error shown instead of a normal page (title: \"%s\")", page.getPageTitle())
+                .isEmpty();
+    }
+
     @Then("no account data is visible")
     public void noAccountDataIsVisible() {
         assertThat(new AccountsOverviewPage().isAccountDataVisible())

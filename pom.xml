@@ -34,6 +34,9 @@
 
     <!-- ===== Runtime defaults (all overridable with -D on the command line) ===== -->
     <env>public</env>
+    <!-- Default scenario filter: known ParaBank defects and work in progress are left out, so the normal
+         build stays green. Any -Dcucumber.filter.tags="..." on the command line replaces it. -->
+    <cucumber.filter.tags>not @knownIssue and not @wip</cucumber.filter.tags>
     <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
   </properties>
 
@@ -150,6 +153,7 @@
           </argLine>
           <systemPropertyVariables>
             <env>${env}</env>
+            <cucumber.filter.tags>${cucumber.filter.tags}</cucumber.filter.tags>
             <allure.results.directory>${allure.results.directory}</allure.results.directory>
           </systemPropertyVariables>
           <!-- In CI, pass -Dmaven.test.failure.ignore=true so the report step still runs -->
