@@ -1075,13 +1075,14 @@ public final class SecretResolver {
 ```java
 package com.parag.framework.data;
 
-/** Unique, parallel-safe data. Including the thread id avoids collisions when two threads generate in the same millisecond. */
+/** Unique, parallel-safe data. Time + thread id + a JVM-wide counter: no collision even when one thread generates twice in the same millisecond. */
 public final class FakeData {
     private static final Faker FAKER = new Faker();
+    private static final AtomicInteger SEQUENCE = new AtomicInteger();
     private FakeData() { }
 
     public static String username() {
-        return "bdd_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId();
+        return "bdd_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId() + "_" + SEQUENCE.incrementAndGet();
     }
     public static String password()  { return "Pw!" + FAKER.internet().password(10, 14, true, false, true); }
     public static String firstName() { return FAKER.name().firstName(); }
