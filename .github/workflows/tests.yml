@@ -44,15 +44,43 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Wait for ParaBank to start
+      - name: Wait for ParaBank to start, then warm it up
         run: |
+          BASE=http://localhost:8080/parabank
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/parabank/index.htm > /dev/null; then
-              echo "ParaBank is up"; exit 0
-            fi
+            if curl -sf "$BASE/index.htm" > /dev/null; then echo "ParaBank answers"; break; fi
+            if [ "$i" = 60 ]; then echo "::error::ParaBank did not start within 5 minutes"; exit 1; fi
             sleep 5
           done
-          echo "ParaBank did not start within 5 minutes"; exit 1
+
+          # First visit to each page is slow (pages compile, database warms up)
+          for page in index.htm register.htm login.htm about.htm "services/bank?_wadl"; do
+            curl -s -o /dev/null -w "%{http_code}  %{time_total}s  $page\n" "$BASE/$page"
+          done
+
+          # A freshly started ParaBank answers its first registrations with "An internal error has
+          # occurred". Register a throwaway customer until it works, so the tests start on a warm bank.
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            rm -f warmup.jar
+            curl -s -c warmup.jar -b warmup.jar "$BASE/register.htm" > /dev/null
+            USERNAME="warmup${attempt}_${RANDOM}"
+            PAGE=$(curl -s -c warmup.jar -b warmup.jar -X POST "$BASE/register.htm" \
+              --data-urlencode "customer.firstName=Warm" --data-urlencode "customer.lastName=Up" \
+              --data-urlencode "customer.address.street=1 Test St" --data-urlencode "customer.address.city=Pune" \
+              --data-urlencode "customer.address.state=MH" --data-urlencode "customer.address.zipCode=411001" \
+              --data-urlencode "customer.phoneNumber=9000000000" --data-urlencode "customer.ssn=123-45-6789" \
+              --data-urlencode "customer.username=$USERNAME" --data-urlencode "customer.password=Warm12345" \
+              --data-urlencode "repeatedPassword=Warm12345")
+            if echo "$PAGE" | grep -q "Welcome $USERNAME"; then
+              echo "::notice title=ParaBank warm-up::Registration works (attempt $attempt)"
+              exit 0
+            fi
+            TITLE=$(echo "$PAGE" | grep -o '<h1 class="title">[^<]*' | head -1 | sed 's/.*>//')
+            echo "::notice title=ParaBank warm-up::Registration attempt $attempt refused, page title: $TITLE"
+            sleep 3
+          done
+          echo "::error title=ParaBank warm-up::Registration still fails after 10 attempts"
+          exit 1
 
       - name: Run tests
         run: |

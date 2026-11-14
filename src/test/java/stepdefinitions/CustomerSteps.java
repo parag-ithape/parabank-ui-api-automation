@@ -30,14 +30,18 @@ public class CustomerSteps {
         if (customer == null) {
             customer = BankCustomer.generate();
             LOG.info("Registering a new customer \"{}\" for this test run", customer.username());
+            long start = System.nanoTime();
             RegisterPage page = new RegisterPage().open().register(customer);
+            LOG.info("Registration answered in {} s", String.format("%.1f", (System.nanoTime() - start) / 1e9));
             LeftMenuComponent menu = new LeftMenuComponent();
             if (!menu.isLoaded()) {                 // registration logs the customer in; no menu = refused
                 throw new FrameworkException("Could not register the test customer \"" + customer.username()
                         + "\". Page title: \"" + page.getPageTitle() + "\". Shown on the page: \""
                         + page.describeErrorsShown() + "\"");
             }
+            start = System.nanoTime();
             menu.logOut();                          // start the scenario logged out
+            LOG.info("Logged out again in {} s", String.format("%.1f", (System.nanoTime() - start) / 1e9));
             REGISTERED.set(customer);
         } else {
             LOG.info("Using customer \"{}\", registered earlier in this run", customer.username());
