@@ -48,7 +48,7 @@
 | G7 | **Rich reporting** | Allure with Gherkin steps, screenshots, page source and API request/response attachments. |
 | G8 | **Security** | No secrets in git. Credentials come from environment variables or GitHub Secrets and are masked in logs and reports. |
 | G9 | **CI-ready** | Runs headless on Linux against a private ParaBank container and publishes the Allure report to GitHub Pages. |
-| G10 | **Simple to read** | A flat layout anyone can navigate: `Features/`, `PageObjects/`, `StepDefinitions/`, `TestRunner/`, `Utils/`. The engine is a handful of classes in `Utils/`. |
+| G10 | **Simple to read** | A flat layout anyone can navigate: `features/`, `pages/`, `stepdefinitions/`, `runner/`, `utils/`. The engine is a handful of classes in `utils/`. |
 
 **Design principles**
 - **Single responsibility:** a page *describes* a screen, an API client *describes* an endpoint, a step *orchestrates and asserts*, and the core *does the plumbing*.
@@ -88,17 +88,17 @@
 │              Tags select what runs: @ui  @api  @smoke  @regression           │
 └───────────────┬──────────────────────────────────────────────────────────────┘
 ┌───────────────▼──────────────────────────────────────────────────────────────┐
-│  Features/*.feature        Gherkin scenarios in business language            │
-│  StepDefinitions/          call pages or API clients, assert with AssertJ    │
-│  TestRunner/               runner + hooks (browser only for @ui)             │
+│  features/*.feature        Gherkin scenarios in business language            │
+│  stepdefinitions/          call pages or API clients, assert with AssertJ    │
+│  runner/                   runner + hooks (browser only for @ui)             │
 └───────────────┬───────────────────────────────────┬──────────────────────────┘
 ┌───────────────▼─────────────────────┐ ┌───────────▼──────────────────────────┐
-│  PageObjects/                       │ │  ApiClients/            (phase 3)    │
+│  pages/                             │ │  api/                   (phase 3)    │
 │  LoginPage, TransferFundsPage …     │ │  AuthApi, AccountApi, TransferApi …  │
 │  locators/<page>.properties         │ │  TestDataSetup (API-built state)     │
 └───────────────┬─────────────────────┘ └───────────┬──────────────────────────┘
 ┌───────────────▼───────────────────────────────────▼──────────────────────────┐
-│  Utils/   the engine                                                         │
+│  utils/   the engine                                                         │
 │  Config  Driver  Locators  Messages  Actions  TestData  ScenarioContext      │
 │  Money  FrameworkException  SuiteListener                                    │
 └───────────────┬──────────────────────────────────────────────────────────────┘
@@ -108,13 +108,13 @@
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Dependency rule (enforce in code review):** StepDefinitions → (PageObjects | ApiClients) → Utils. `Utils` never imports the other folders. Pages never import API clients or assertion libraries, and API clients never import pages.
+**Dependency rule (enforce in code review):** stepdefinitions → (pages | api) → utils. `utils` never imports the other folders. Pages never import API clients or assertion libraries, and API clients never import pages.
 
 ---
 
 ## 4. Project Folder Structure
 
-Flat and role-named, so anyone (technical or not) can find things. A folder exists only once it holds a file; the four main folders below are kept from day one so the layout is visible.
+Flat and role-named, so anyone (technical or not) can find things. A folder exists only once it holds a file; the main folders below are kept from day one so the layout is visible.
 
 ```
 parabank-ui-api-automation/
@@ -126,15 +126,12 @@ parabank-ui-api-automation/
 │   ├── FRAMEWORK_DESIGN.md         # This document
 │   └── TEST_PLAN.md                # Test cases; their IDs are Cucumber tags (@TRF-02)
 │
-├── Features/                       # *.feature files: the tests in plain English
-│   └── login.feature …             #   one file per business capability, tagged @ui / @api
-│
 ├── src/test/java/
-│   ├── PageObjects/                # One class per screen (+ BasePage, shared widgets)
-│   ├── StepDefinitions/            # Gherkin step code: call pages/API, assert with AssertJ
-│   ├── TestRunner/                 # CucumberTestRunner + Hooks (browser start/stop, screenshots)
-│   ├── ApiClients/                 # (phase 3) REST clients, API models, TestDataSetup
-│   └── Utils/                      # The engine
+│   ├── pages/                      # One class per screen (+ BasePage, shared widgets)
+│   ├── stepdefinitions/            # Gherkin step code: call pages/API, assert with AssertJ
+│   ├── runner/                     # CucumberTestRunner + Hooks (browser start/stop, screenshots)
+│   ├── api/                        # (phase 3) REST clients, API models, TestDataSetup
+│   └── utils/                      # The engine
 │       ├── Config.java             #   settings: -D > env var > env-<env>.properties > config.properties
 │       ├── Driver.java             #   start/get/quit the browser, one per thread
 │       ├── Locators.java           #   reads locators/<page>.properties → Selenium By
@@ -148,6 +145,7 @@ parabank-ui-api-automation/
 │       └── LocatorIntegrityTest.java # checks every locator file before any browser starts
 │
 └── src/test/resources/
+    ├── features/                   # *.feature files: the tests in plain English, tagged @ui / @api / @TRF-02
     ├── locators/                   # ONE FILE PER PAGE: common.properties, login.properties …
     ├── config.properties           # Defaults: browser, timeouts, headless…
     ├── env-public.properties       # baseUrl = public ParaBank site (default)
@@ -159,12 +157,12 @@ parabank-ui-api-automation/
     ├── log4j2.xml                  # Console + run log under target/logs
     ├── allure.properties           # Allure results dir
     ├── allure-categories.json      # Failure groups on the Allure "Categories" tab
-    └── META-INF/services/org.testng.ITestNGListener   # registers Utils.SuiteListener
+    └── META-INF/services/org.testng.ITestNGListener   # registers utils.SuiteListener
 ```
 
 **Not in the repo on purpose:** driver `.exe` files (Selenium Manager downloads drivers), and `logs/`, `Reports/`, `test-output/` (all generated output lives under `target/`).
 
-> **Naming note:** folders are PascalCase (`PageObjects`, `Utils`) for readability, so Java packages are `PageObjects`, `Utils`, … instead of the usual lower-case reverse-domain names. This is a deliberate trade-off for a single, self-contained test project.
+> **Naming note:** each folder is a short lower-case Java package named after its role (`pages`, `stepdefinitions`, `runner`, `utils`). That keeps the Java convention of lower-case packages without the deep `com/company/project/...` folder chain, which a single, self-contained test project doesn't need.
 
 ## 5. Build Configuration (pom.xml)
 
@@ -414,9 +412,9 @@ baseUrl=http://localhost:8080/parabank
 → missing everywhere  ⇒  FrameworkException("Missing config key: …")   (fail fast)
 ```
 
-### 6.3 `Utils/Config.java`
+### 6.3 `utils/Config.java`
 
-`Utils/Config.java` loads `config.properties` and `env-<env>.properties` once from the classpath (works on any OS and in CI) and is read-only afterwards, so it is safe for parallel threads. Key names are constants on the class, so no code types a key by hand.
+`utils/Config.java` loads `config.properties` and `env-<env>.properties` once from the classpath (works on any OS and in CI) and is read-only afterwards, so it is safe for parallel threads. Key names are constants on the class, so no code types a key by hand.
 
 ```java
 String url   = Config.get(Config.BASE_URL);
@@ -437,7 +435,7 @@ String env   = Config.env();                               // public | local
 
 ## 7. Driver Management
 
-`Utils/Driver.java` is the only class that creates browsers. It holds **one browser per thread** (`ThreadLocal`): with a static WebDriver, parallel scenario A would click in scenario B's browser.
+`utils/Driver.java` is the only class that creates browsers. It holds **one browser per thread** (`ThreadLocal`): with a static WebDriver, parallel scenario A would click in scenario B's browser.
 
 ```java
 Driver.start();        // @Before hook of @ui scenarios: browser, headless, size, local|grid from config
@@ -503,9 +501,9 @@ table.row.byText=xpath://table//tr[td[normalize-space()='{0}']]
 menu.link.byText=linkText:{0}
 ```
 
-### 8.2 `Utils/Locators.java`
+### 8.2 `utils/Locators.java`
 
-`Utils/Locators.java` reads one page file and converts `strategy:value` to a Selenium `By`. Each file is read once, cached, and shared read-only by all threads.
+`utils/Locators.java` reads one page file and converts `strategy:value` to a Selenium `By`. Each file is read once, cached, and shared read-only by all threads.
 
 ```java
 Locators login  = Locators.forPage("login");                 // locators/login.properties
@@ -519,7 +517,7 @@ By row          = Locators.forPage("common").by("table.row.byText", "Savings"); 
 
 ### 8.3 Locator integrity test (catches broken locators before the scenarios run)
 ```java
-// src/test/java/Utils/LocatorIntegrityTest.java
+// src/test/java/utils/LocatorIntegrityTest.java
 // Parses EVERY key in EVERY locators/*.properties file. No browser needed, runs in under a second.
 // Listed first in testng.xml, so a typo fails the build before any browser starts.
 // Collects ALL bad entries and reports them in one AssertJ failure, instead of stopping at the first.
@@ -581,7 +579,7 @@ loan.approved.status=Approved
 loan.denied.status=Denied
 ```
 
-`Utils/Messages.java` loads `messages_<messages.locale>.properties` as UTF-8, once:
+`utils/Messages.java` loads `messages_<messages.locale>.properties` as UTF-8, once:
 
 ```java
 Messages.get("login.error.invalid")
@@ -599,7 +597,7 @@ Messages.get("register.success.title", username)   // fills {0}
 | Customer templates | JSON | `testdata/customers.json` | address, phone, SSN pattern |
 | Bill-pay payees | JSON | `testdata/payees.json` | name, address, account number |
 | Unique values (username, names) | Generated | `TestData` | `TestData.username()` → `bdd_1731..._7_3` |
-| Starting state (accounts, balances) | API | `ApiClients/TestDataSetup` | customer with checking 500.00 + empty savings |
+| Starting state (accounts, balances) | API | `api/TestDataSetup` | customer with checking 500.00 + empty savings |
 | Secrets (if any) | Env vars | `${VAR}` placeholders | `${PARABANK_PASSWORD}` |
 
 **Rules:**
@@ -624,7 +622,7 @@ Messages.get("register.success.title", username)   // fills {0}
 
 ### 10.3 Model
 ```java
-package PageObjects;   // UI test-data records live next to the pages that use them
+package pages;   // UI test-data records live next to the pages that use them
 
 /** Immutable customer record. toString() masks the password, so it never appears in Allure parameters or logs. */
 public record BankCustomer(String firstName, String lastName, String street, String city, String state,
@@ -635,9 +633,9 @@ public record BankCustomer(String firstName, String lastName, String street, Str
 }
 ```
 
-### 10.4 `Utils/TestData.java`
+### 10.4 `utils/TestData.java`
 
-`Utils/TestData.java` does three jobs:
+`utils/TestData.java` does three jobs:
 
 ```java
 // 1. JSON files from the classpath → records/POJOs (unknown fields ignored)
@@ -658,7 +656,7 @@ TestData.firstName();  TestData.lastName();
 
 ## 11. Core Utilities
 
-### 11.1 `Utils/Actions.java`: every interaction and every wait
+### 11.1 `utils/Actions.java`: every interaction and every wait
 Pages never call `driver.findElement(..).click()`. They call `Actions`, so waiting, retries and logging live in one place. One instance per page object (so per scenario thread).
 
 | Group | Methods |
@@ -670,7 +668,7 @@ Pages never call `driver.findElement(..).click()`. They call `Actions`, so waiti
 
 **Waiting rules:** explicit waits only (`timeout.explicit`, polling `timeout.polling.millis`, stale elements ignored while waiting). No implicit waits (mixing them gives unpredictable wait times) and no `Thread.sleep` (slow and flaky). `waitUntil` builds a fresh wait each time, because `withMessage()` changes the wait it is called on and the message would otherwise stick to later timeouts. `WebElement.getAttribute` is deprecated since Selenium 4.27, hence `getDomAttribute` / `getDomProperty`.
 
-### 11.2 `Utils/Money.java`
+### 11.2 `utils/Money.java`
 Bank amounts are always `BigDecimal`, never `double` (which loses cents). `Money.parse("$1,234.50")` → `1234.50`, `Money.parse("-$20.00")` → `-20.00`; unreadable text throws `FrameworkException` quoting it.
 
 ---
@@ -687,7 +685,7 @@ Bank amounts are always `BigDecimal`, never `double` (which loses cents). `Money
 
 ### 12.2 `BasePage.java`
 ```java
-package PageObjects;
+package pages;
 
 /**
  * Parent of all pages. It gives every page:
@@ -726,7 +724,7 @@ public abstract class BasePage {
 
 ### 12.3 `LoginPage.java`
 ```java
-package PageObjects;
+package pages;
 
 public class LoginPage extends BasePage {
 
@@ -770,7 +768,7 @@ public class LoginPage extends BasePage {
 
 ### 12.4 `TransferFundsPage.java`
 ```java
-package PageObjects;
+package pages;
 
 public class TransferFundsPage extends BasePage {
 
@@ -800,7 +798,7 @@ public class TransferFundsPage extends BasePage {
 
 ### 12.5 Component example: `AccountsTableComponent.java`
 ```java
-package PageObjects;   // shared widgets live next to the pages
+package pages;   // shared widgets live next to the pages
 
 /** The accounts overview table, written once and used by every page that lists accounts. */
 public class AccountsTableComponent extends BaseComponent {
@@ -824,16 +822,16 @@ public class AccountsTableComponent extends BaseComponent {
 Cucumber is the **primary way tests are written**. Pages, API clients, locators, messages, data, drivers and Allure all sit underneath it.
 
 ```
-Features/*.feature                       # scenarios, grouped by tags (@ui, @api), not by folders
-src/test/java/StepDefinitions/           # LoginSteps, TransferSteps, TransferApiSteps …
-src/test/java/TestRunner/                # CucumberTestRunner.java, Hooks.java
+src/test/resources/features/*.feature   # scenarios, grouped by tags (@ui, @api), not by folders
+src/test/java/stepdefinitions/           # LoginSteps, TransferSteps, TransferApiSteps …
+src/test/java/runner/                    # CucumberTestRunner.java, Hooks.java
 ```
 
 ### 13.1 Runner (parallel scenarios)
 ```java
 @CucumberOptions(
-    features = "Features",
-    glue = {"StepDefinitions", "TestRunner"},
+    features = "src/test/resources/features",
+    glue = {"stepdefinitions", "runner"},
     plugin = {"pretty",
               "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",   // Allure for BDD
               "rerun:target/rerun.txt"},                           // failed scenarios, for a re-run
@@ -854,10 +852,10 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
 <!-- data-provider-thread-count = how many scenarios run at once. Override with -DdpThreads=N. -->
 <suite name="ParaBank" data-provider-thread-count="4">
   <test name="Framework checks" preserve-order="true">
-    <classes><class name="Utils.LocatorIntegrityTest"/></classes>
+    <classes><class name="utils.LocatorIntegrityTest"/></classes>
   </test>
   <test name="Scenarios">
-    <classes><class name="TestRunner.CucumberTestRunner"/></classes>
+    <classes><class name="runner.CucumberTestRunner"/></classes>
   </test>
 </suite>
 ```
@@ -899,9 +897,9 @@ public class Hooks {
 }
 ```
 
-### 13.3 `Utils/ScenarioContext.java`
+### 13.3 `utils/ScenarioContext.java`
 
-`Utils/ScenarioContext.java` passes data between the steps of ONE scenario (e.g. an account id created in a Given step and checked in a Then step). It is a per-thread map, cleared by the `@After` hook. Keys are constants on the class; add a new constant instead of typing free text.
+`utils/ScenarioContext.java` passes data between the steps of ONE scenario (e.g. an account id created in a Given step and checked in a Then step). It is a per-thread map, cleared by the `@After` hook. Keys are constants on the class; add a new constant instead of typing free text.
 
 ```java
 ScenarioContext.put(ScenarioContext.CHECKING_ACCOUNT_ID, id);
@@ -934,7 +932,7 @@ public class TransferUiSteps {
 
 ### 13.5 Feature examples
 
-**`Features/login.feature`**
+**`features/login.feature`**
 ```gherkin
 @ui
 Feature: Customer login
@@ -956,7 +954,7 @@ Feature: Customer login
       |               |          | login.error.empty   |
 ```
 
-**`Features/bill-pay.feature`**
+**`features/bill-pay.feature`**
 ```gherkin
 @ui
 Feature: Bill pay
@@ -993,6 +991,7 @@ Feature: Bill pay
 | `@regression` | Full suite, nightly |
 | `@wip` | Work in progress, excluded by default |
 | `@knownIssue` | App behaviour differs from the expected rule; documented, excluded by default |
+| `@TRF-02`, `@LOG-01` … | Test-case ID from `docs/TEST_PLAN.md`: every scenario carries its ID, so each requirement traces to a test and back |
 
 ---
 
@@ -1018,7 +1017,7 @@ API testing is a **first-class layer**, not a helper. It serves three purposes:
 
 ### 14.2 `RequestSpecFactory.java`
 ```java
-package ApiClients;
+package api;
 
 /** One shared request spec. ParaBank returns XML by default, so JSON is requested explicitly. */
 public final class RequestSpecFactory {
@@ -1041,7 +1040,7 @@ public final class RequestSpecFactory {
 
 ### 14.3 Client example: `TransferApi.java`
 ```java
-package ApiClients;
+package api;
 
 /** One method per endpoint. Returns the raw Response so callers can assert status and body. */
 public final class TransferApi {
@@ -1070,7 +1069,7 @@ ParaBank endpoints used by this suite (verify against the WADL):
 
 ### 14.4 Test data through the API: `TestDataSetup.java`
 ```java
-package ApiClients;
+package api;
 
 /**
  * Builds the starting state for a scenario in seconds instead of minutes of clicking.
@@ -1099,7 +1098,7 @@ public final class TestDataSetup {
 
 ### 14.5 `MaskingLogFilter.java`
 ```java
-package ApiClients;
+package api;
 
 /** Logs every API call, with the password path segment and password parameters masked. */
 public class MaskingLogFilter implements Filter {
@@ -1174,7 +1173,7 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
 - Pool size = `data-provider-thread-count` in `testng.xml`, overridable with `-DdpThreads=N` (`SuiteListener`).
 - Each scenario gets its own browser (`@ui` hook), its own `ScenarioContext` and new step-class instances (PicoContainer).
 
-`Utils/SuiteListener.java` (registered in `META-INF/services`) applies `-DdpThreads=N` to every suite before it starts, and rejects values that are not positive whole numbers.
+`utils/SuiteListener.java` (registered in `META-INF/services`) applies `-DdpThreads=N` to every suite before it starts, and rejects values that are not positive whole numbers.
 
 ### 15.2 Thread-safety checklist (mandatory in code review)
 - [ ] No `static` WebDriver, WebElement, page or test-data fields (`static final` constants are fine).
@@ -1219,9 +1218,9 @@ allure.results.directory=target/allure-results
 | `Hooks` on failure | Screenshot, page source, browser console log |
 | Feature folders + tags | Behaviours tab grouped by feature; filter by `@smoke`, `@api`… |
 
-### 17.3 `Utils/AllureAttachments.java` (phase 2)
+### 17.3 `utils/AllureAttachments.java` (phase 2)
 ```java
-package Utils;
+package utils;
 
 /** Every attachment helper in one place. All methods are safe to call even if the driver is broken. */
 public final class AllureAttachments {
@@ -1244,7 +1243,7 @@ public final class AllureAttachments {
 ```
 
 ### 17.4 Environment widget + failure categories
-`Utils/SuiteListener.java`, when the suite starts, writes `environment.properties` (env, base URL, browser, headless, Java, OS) into the Allure results folder and copies `allure-categories.json` there as `categories.json`. A reporting problem is logged as a warning and never fails the run.
+`utils/SuiteListener.java`, when the suite starts, writes `environment.properties` (env, base URL, browser, headless, Java, OS) into the Allure results folder and copies `allure-categories.json` there as `categories.json`. A reporting problem is logged as a warning and never fails the run.
 
 **`src/test/resources/allure-categories.json`**: groups failures by root cause on the Allure "Categories" tab
 ```json
@@ -1260,7 +1259,7 @@ public final class AllureAttachments {
 
 **`src/test/resources/META-INF/services/org.testng.ITestNGListener`** (auto-registered, no suite XML entries needed)
 ```
-Utils.SuiteListener
+utils.SuiteListener
 ```
 
 ### 17.5 Generating the report
@@ -1369,6 +1368,7 @@ jobs:
           name: allure-report-${{ matrix.browser }}
           path: target/site/allure-maven-plugin
   # A follow-up job publishes the Chrome report to GitHub Pages (actions/upload-pages-artifact + actions/deploy-pages).
+  # That Pages URL is the public report link in the README (showcase item S7, §23).
 ```
 
 ### 19.2 Quality gates
@@ -1407,7 +1407,7 @@ jobs:
 **Naming**
 | Item | Convention | Example |
 |---|---|---|
-| Folders / packages | PascalCase, by role (§4) | `PageObjects`, `StepDefinitions`, `Utils` |
+| Folders / packages | lower-case, by role (§4) | `pages`, `stepdefinitions`, `runner`, `utils` |
 | Page classes | `<Name>Page` | `TransferFundsPage` |
 | Components | `<Name>Component` | `AccountsTableComponent` |
 | API clients | `<Resource>Api` | `TransferApi` |
@@ -1455,7 +1455,7 @@ docker run -d -p 8080:8080 parasoft/parabank
 mvn clean test -Plocal -Dbrowser=firefox -Dheadless=true -DdpThreads=4
 
 # One feature file
-mvn clean test -Dcucumber.features="Features/login.feature"
+mvn clean test -Dcucumber.features="src/test/resources/features/login.feature"
 
 # Re-run only the scenarios that failed last time
 mvn test -Dcucumber.features="@target/rerun.txt"
@@ -1473,12 +1473,27 @@ mvn allure:serve
 | Phase | Duration (indicative) | Deliverables | Exit criteria |
 |---|---|---|---|
 | **0. Setup** | 1 day | Repo, `pom.xml`, `.gitignore`, README, folder layout (§4) | `mvn clean verify` green on Windows and Linux |
-| **1. Core** | 3–4 days | `Utils/`: Config, Driver, Locators, Messages, Actions, TestData, ScenarioContext, Money, FrameworkException, SuiteListener | LocatorIntegrityTest passes |
-| **2. BDD + first UI feature** | 2–3 days | Runner, hooks; register + login pages, `login.feature` | Login scenarios green, screenshot attached on a forced failure |
+| **1. Core** | 3–4 days | `utils/`: Config, Driver, Locators, Messages, Actions, TestData, ScenarioContext, Money, FrameworkException, SuiteListener | LocatorIntegrityTest passes |
+| **2. BDD + first UI feature** | 2–3 days | Runner, hooks; register + login pages, `login.feature` tagged with `@LOG-xx` IDs | Login scenarios green, screenshot attached on a forced failure |
 | **3. API layer** | 2–3 days | RequestSpecFactory, MaskingLogFilter, clients, models, schemas, TestDataSetup | `@api` transfer scenarios green, no browser started |
 | **4. Banking features** | 1 week | Open account, transfer, bill pay, find transactions, loan: UI, API and hybrid scenarios | 15–20 scenarios green in parallel (4 threads) on Chrome and Firefox |
-| **5. Reporting and CI** | 2 days | Allure categories/environment, GitHub Actions with ParaBank service container, report on Pages | Green badge, public report link in README |
+| **5. Reporting and CI** | 2 days | AllureAttachments, GitHub Actions with ParaBank service container, Allure report published to GitHub Pages | Green CI badge, public report link and an Allure screenshot in README |
 | **6. Hardening** | ongoing | Known-issue findings documented, dependency upgrades, optional Selenium Grid | Pass rate above 95% without re-runs |
+
+
+### Portfolio showcase checklist
+This repo doubles as a freelancing portfolio piece. A reviewer usually spends about two minutes on it, so S1–S7 must be true by the end of phase 5 (S8 grows during phase 6):
+
+| # | What the reviewer sees | Delivered in | Where |
+|---|---|---|---|
+| S1 | README: what is tested, one-line run command | Phase 0 (kept current every phase) | `README.md` |
+| S2 | README: screenshot of the Allure report | Phase 5 | `docs/images/allure-report.png`, linked from README |
+| S3 | Green CI badge at the top of the README | Phase 5 | `.github/workflows/tests.yml` (§19) |
+| S4 | Readable `.feature` files tagged with test-plan IDs (`@LOG-01`, `@TRF-02`) | Phase 2 onwards | `src/test/resources/features/` (§13.7) |
+| S5 | A mix of UI, API and hybrid UI + API scenarios | Phases 2–4 | §14.6 scenario styles |
+| S6 | Parallel runs (`-DdpThreads=4`) shown in README and CI | Phase 4 (README), phase 5 (CI) | §15 |
+| S7 | Public Allure report link | Phase 5 | GitHub Pages (§19) |
+| S8 | `@knownIssue` findings written up (real defects found in ParaBank) | Phase 6 | README "Findings" section |
 
 ---
 
@@ -1510,7 +1525,7 @@ Thumbs.db
 ```
 
 ### Appendix B: Errors
-There is one framework error type, `Utils/FrameworkException` (unchecked, so no `throws Exception` everywhere). The message always says what is wrong and where: `Missing config key: browser (env=local)`, `Missing locator key: login.login.button`, `Secret/environment variable not set: PARABANK_PASSWORD`. Allure groups them by message text (`allure-categories.json`).
+There is one framework error type, `utils/FrameworkException` (unchecked, so no `throws Exception` everywhere). The message always says what is wrong and where: `Missing config key: browser (env=local)`, `Missing locator key: login.login.button`, `Secret/environment variable not set: PARABANK_PASSWORD`. Allure groups them by message text (`allure-categories.json`).
 
 ---
 *End of design document. Keep it next to the code (`docs/FRAMEWORK_DESIGN.md`) and update it in the same pull request as any architectural change.*

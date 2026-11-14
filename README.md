@@ -33,13 +33,13 @@ Java 17 · Selenium WebDriver · Cucumber BDD · TestNG · REST Assured · Maven
 ## Project structure
 
 ```
-Features/               Test scenarios in plain English (.feature), tagged @ui / @api
 src/test/java/
-├── PageObjects/        One class per ParaBank screen
-├── StepDefinitions/    Code behind each Gherkin step
-├── TestRunner/         Cucumber runner + hooks (browser start/stop, screenshots)
-└── Utils/              Config, browser, locators, waits, test data
+├── pages/              One class per ParaBank screen
+├── stepdefinitions/    Code behind each Gherkin step
+├── runner/             Cucumber runner + hooks (browser start/stop, screenshots)
+└── utils/              Config, browser, locators, waits, test data
 src/test/resources/
+├── features/           Test scenarios in plain English (.feature), tagged @ui / @api
 ├── locators/           One locator file per page
 ├── config.properties   Browser, timeouts…  (+ env-public / env-local for the URL)
 └── testng.xml          What runs

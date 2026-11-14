@@ -2,7 +2,7 @@
 <!-- data-provider-thread-count = how many scenarios run at once. Override with -DdpThreads=N. -->
 <suite name="ParaBank" data-provider-thread-count="4">
   <test name="Framework checks" preserve-order="true">
-    <classes><class name="Utils.LocatorIntegrityTest"/></classes>
+    <classes><class name="utils.LocatorIntegrityTest"/></classes>
   </test>
   <!-- The "Scenarios" test (CucumberTestRunner) is added in roadmap phase 2, together with the runner. -->
 </suite>

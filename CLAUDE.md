@@ -10,7 +10,7 @@ This repo is a ParaBank UI + API test automation framework (Java 17, Selenium, C
 ## Rules
 - Locators go in src/test/resources/locators/<page>.properties, one file per page. Never hardcode locators in Java.
 - Expected UI texts go in messages_en.properties. Never hardcode them in steps.
-- No Thread.sleep, no implicit waits, no System.out. Explicit waits through Utils/Actions only.
+- No Thread.sleep, no implicit waits, no System.out. Explicit waits through utils/Actions only.
 - No assertions in page objects or API clients; assert in steps with AssertJ and a description.
 - Money is always BigDecimal.
 - No secrets in code or committed files.

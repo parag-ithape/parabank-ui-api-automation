@@ -1,4 +1,4 @@
-package Utils;
+package utils;
 
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.PageLoadStrategy;

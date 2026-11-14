@@ -1,4 +1,4 @@
-package Utils;
+package utils;
 
 /**
  * The one error type of the framework: missing config key, bad locator, missing test data, unset secret.
