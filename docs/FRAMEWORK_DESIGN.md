@@ -893,17 +893,32 @@ public final class PlaceholderUtils {
 // src/test/java/com/parag/parabank/framework/LocatorIntegrityTest.java
 // Parses EVERY key in EVERY locators/*.properties file. No browser needed, runs in under a second.
 // Listed first in suites/testng.xml, so a typo fails the build before any browser starts.
+// Collects ALL bad entries and reports them in one AssertJ failure, instead of stopping at the first.
+// Also fails when the folder or the file list is empty, so it can never pass vacuously.
 public class LocatorIntegrityTest {
     @Test
-    public void allLocatorFilesAreValid() throws Exception {
-        Path dir = Path.of(getClass().getClassLoader().getResource("locators").toURI());
-        try (Stream<Path> files = Files.list(dir)) {
-            files.filter(f -> f.toString().endsWith(".properties")).forEach(f -> {
-                String page = f.getFileName().toString().replace(".properties", "");
-                LocatorRepository repo = Locators.forPage(page);
-                repo.keys().forEach(k -> repo.by(k, "x", "y", "z"));   // throws on bad strategy/format
-            });
+    public void allLocatorFilesAreValid() throws IOException, URISyntaxException {
+        URL dirUrl = getClass().getClassLoader().getResource("locators");
+        assertThat(dirUrl).as("'locators' folder on the test classpath").isNotNull();
+        List<Path> files;
+        try (Stream<Path> listing = Files.list(Path.of(dirUrl.toURI()))) {
+            files = listing.filter(f -> f.getFileName().toString().endsWith(".properties")).sorted().toList();
         }
+        assertThat(files).as("locator files").isNotEmpty();
+
+        List<String> problems = new ArrayList<>();
+        for (Path file : files) {
+            String page = file.getFileName().toString().replace(".properties", "");
+            try {
+                LocatorRepository repo = Locators.forPage(page);
+                if (repo.keys().isEmpty()) problems.add(page + ": file has no locator entries");
+                for (String key : repo.keys()) {
+                    try { repo.by(key, "x", "y", "z"); }                 // throws on bad strategy/format/empty value
+                    catch (FrameworkException | IllegalArgumentException e) { problems.add(e.getMessage()); }
+                }
+            } catch (FrameworkException e) { problems.add(e.getMessage()); }
+        }
+        assertThat(problems).as("invalid locator entries").isEmpty();
     }
 }
 ```
@@ -1436,6 +1451,7 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
   </test>
 </suite>
 ```
+> Build order: TestNG fails the whole suite on a class it cannot load, so the `Scenarios` test is added in phase 2 together with `CucumberTestRunner`. Until then the suite runs only the framework checks.
 
 ### 13.2 Hooks: browser only for `@ui`, cleanup for everything
 ```java
