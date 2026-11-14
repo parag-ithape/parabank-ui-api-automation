@@ -720,6 +720,9 @@ public abstract class BasePage {
         return (T) this;
     }
 
+    /** Opens a ParaBank page by path ("/index.htm"), so no page builds URLs itself. */
+    protected void openPath(String path) { driver.get(Config.get(Config.BASE_URL) + path); }
+
     public String getPageTitle() { return actions.text(common.by("page.title")); }
 }
 ```
@@ -740,7 +743,7 @@ public class LoginPage extends BasePage {
 
     @Step("Open ParaBank")
     public LoginPage open() {
-        driver.get(Config.get("baseUrl") + "/index.htm");
+        openPath("/index.htm");
         return waitUntilLoaded();
     }
 
@@ -784,7 +787,7 @@ public class TransferFundsPage extends BasePage {
 
     @Step("Transfer {value} from account {fromId} to account {toId}")
     public TransferFundsPage transfer(BigDecimal value, long fromId, long toId) {
-        wait.optionsLoaded(fromAccount);                 // account lists are filled after page load
+        actions.waitOptionsLoaded(fromAccount);          // account lists are filled after page load
         actions.type(amount, value.toPlainString());
         actions.selectByValue(fromAccount, String.valueOf(fromId));
         actions.selectByValue(toAccount, String.valueOf(toId));
@@ -803,7 +806,7 @@ public class TransferFundsPage extends BasePage {
 package pages;   // shared widgets live next to the pages
 
 /** The accounts overview table, written once and used by every page that lists accounts. */
-public class AccountsTableComponent extends BaseComponent {
+public class AccountsTableComponent extends BasePage {   // components extend BasePage too (one parent, no BaseComponent)
 
     public AccountsTableComponent() { super("accounts-overview"); }
 
@@ -852,7 +855,7 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
 ```xml
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <!-- data-provider-thread-count = how many scenarios run at once. Override with -DdpThreads=N. -->
-<suite name="ParaBank" data-provider-thread-count="4">
+<suite name="ParaBank" data-provider-thread-count="2">   <!-- 2 for the shared public site; CI passes -DdpThreads=4 -->
   <test name="Framework checks" preserve-order="true">
     <classes><class name="utils.LocatorIntegrityTest"/></classes>
   </test>
@@ -861,37 +864,44 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
   </test>
 </suite>
 ```
-> Build order: TestNG fails the whole suite on a class it cannot load, so the `Scenarios` test is added in phase 2 together with `CucumberTestRunner`. Until then the suite runs only the framework checks.
+> The default of 2 parallel scenarios protects the shared public demo site (§15.3). Raise it with `-DdpThreads=N` on a private ParaBank.
 
 ### 13.2 Hooks: browser only for `@ui`, cleanup for everything
 ```java
 public class Hooks {
 
+    /** Every scenario: log lines carry the scenario name, so parallel output stays readable. */
+    @Before(order = 0)
+    public void nameLogLines(Scenario scenario) {
+        ThreadContext.put("scenario", scenario.getName().replaceAll("\W+", "_"));
+    }
+
     /** API-only scenarios never open a browser, so they stay fast. */
-    @Before(value = "@ui", order = 0)
-    public void startBrowser(Scenario scenario) {
-        ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_"));
+    @Before(value = "@ui", order = 1)
+    public void startBrowser() {
         ThreadContext.put("browser", Config.get(Config.BROWSER));
         Driver.start();
     }
 
-    /** Attach evidence BEFORE quitting: once the driver is gone, no screenshot can be taken. */
-    @After(value = "@ui", order = 0)
+    /** Attach evidence BEFORE quitting: once the browser is gone, no screenshot can be taken. */
+    @After(value = "@ui", order = 1)                 // @After hooks run highest order first
     public void stopBrowser(Scenario scenario) {
         try {
             if (scenario.isFailed() && Driver.isStarted()) {
-                byte[] png = ((TakesScreenshot) Driver.get()).getScreenshotAs(OutputType.BYTES);
-                scenario.attach(png, "image/png", "Failure screenshot");
-                if (Config.getBoolean("attach.page.source.on.failure")) AllureAttachments.pageSource();
+                if (Config.getBoolean(Config.SCREENSHOT_ON_FAILURE)) {
+                    byte[] png = ((TakesScreenshot) Driver.get()).getScreenshotAs(OutputType.BYTES);
+                    scenario.attach(png, "image/png", "Failure screenshot");
+                }
+                if (Config.getBoolean(Config.ATTACH_PAGE_SOURCE_ON_FAILURE)) AllureAttachments.pageSource();
                 AllureAttachments.browserConsoleLogs();
             }
         } finally {
-            Driver.quit();                  // always, even if attaching failed
+            Driver.quit();                           // always, even if attaching failed
         }
     }
 
-    /** Runs for every scenario, UI or API: no data leaks into the next scenario on this thread. */
-    @After(order = 1)
+    /** Runs last for every scenario, UI or API: nothing leaks into the next scenario on this thread. */
+    @After(order = 0)
     public void clearContext() {
         ScenarioContext.clear();
         ThreadContext.clearAll();
@@ -934,27 +944,27 @@ public class TransferUiSteps {
 
 ### 13.5 Feature examples
 
-**`features/login.feature`**
+**`features/login.feature`** (as built in phase 2; `@regression` on the Feature, `@smoke` on P1 cases, test-plan ID on every scenario)
 ```gherkin
-@ui
-Feature: Customer login
+@ui @regression
+Feature: Customer login and logout
+  A registered customer logs in to see their accounts, and logs out to protect them.
 
-  @smoke
-  Scenario: Registered customer can log in
-    Given a newly registered customer
+  @smoke @LOG-01
+  Scenario: Registered customer logs in
+    Given a registered customer
     When they log in with their username and password
-    Then the accounts overview is displayed
+    Then their accounts overview is shown
 
-  @regression
-  Scenario Outline: Login is refused with invalid credentials
-    When a visitor logs in with username "<username>" and password "<password>"
-    Then the login error "<message>" is shown
-
-    Examples:
-      | username      | password | message            |
-      | unknown_user  | wrong    | login.error.invalid |
-      |               |          | login.error.empty   |
+  @smoke @LOG-02
+  Scenario: Login is refused with a wrong password
+    Given a registered customer
+    When they log in with a wrong password
+    Then they are told the username and password could not be verified
 ```
+Steps read as business sentences; the expected texts behind them (`login.error.invalid` …) stay in `messages_en.properties`, never in the feature.
+
+**Customers for UI scenarios:** ParaBank has no registration API, so `Given a registered customer` registers through the UI once per thread (cached in a `ThreadLocal`), logs out, and reuses that customer in later scenarios on the same thread. Registration scenarios generate their own new customer.
 
 **`features/bill-pay.feature`**
 ```gherkin
@@ -1187,7 +1197,7 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
 
 ### 15.3 Thread-count sizing
 - Laptop: roughly **CPU cores − 1** browsers (each Chrome uses about 300–500 MB of RAM).
-- Public ParaBank site: keep it **low (2–3)**. It's a shared demo; don't load it.
+- Public ParaBank site: keep it **low (2–3)**. It's a shared demo; don't load it. `testng.xml` defaults to 2.
 - Local or CI container: 4 is a good default. Increase step by step. If failures rise with thread count, look for shared state or environment capacity limits, not "flaky tests".
 
 ---

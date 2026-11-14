@@ -20,8 +20,8 @@ Java 17 · Selenium WebDriver · Cucumber BDD · TestNG · REST Assured · Maven
 
 | Feature | Scenarios | Layer | Status |
 | --- | --- | --- | --- |
-| Customer registration | New customer can register | UI | 🔜 |
-| Login | Valid, invalid, empty fields | UI | 🔜 |
+| Customer registration | Valid registration, duplicate username, password mismatch, required fields (REG-01–04) | UI | ✅ |
+| Login / logout | Valid, wrong password, empty fields, no access after logout (LOG-01–04) | UI | ✅ |
 | Accounts overview | Opening balance shown correctly | UI + API | 🔜 |
 | Open account | New savings account is created | UI + API | 🔜 |
 | Transfer funds | Transfer between own accounts updates both balances | Hybrid | 🔜 |
@@ -50,8 +50,14 @@ Full design: [docs/FRAMEWORK_DESIGN.md](docs/FRAMEWORK_DESIGN.md) · Test cases:
 ## How to run
 
 ```bash
-# all tests
+# all tests (public ParaBank site, Chrome)
 mvn clean test
+
+# smoke only, headless
+mvn clean test -Dcucumber.filter.tags="@smoke" -Dheadless=true
+
+# one test case from the test plan
+mvn clean test -Dcucumber.filter.tags="@LOG-01"
 
 # only UI or only API
 mvn test -Dcucumber.filter.tags="@ui"
