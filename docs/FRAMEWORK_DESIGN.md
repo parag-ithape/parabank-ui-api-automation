@@ -1084,7 +1084,11 @@ public final class FakeData {
     public static String username() {
         return "bdd_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId() + "_" + SEQUENCE.incrementAndGet();
     }
-    public static String password()  { return "Pw!" + FAKER.internet().password(10, 14, true, false, true); }
+    // internet().password(int,int,boolean,boolean,boolean) is deprecated for removal in Datafaker 2.7: use a text rule
+    private static final Text.TextRuleConfig PASSWORD_RULE = Text.TextSymbolsBuilder.builder()
+            .len(12).with(Text.EN_UPPERCASE, 1).with(Text.EN_LOWERCASE, 1).with(Text.DIGITS, 1).build();
+
+    public static String password()  { return "Pw!" + FAKER.text().text(PASSWORD_RULE); }
     public static String firstName() { return FAKER.name().firstName(); }
     public static String lastName()  { return FAKER.name().lastName(); }
 }
