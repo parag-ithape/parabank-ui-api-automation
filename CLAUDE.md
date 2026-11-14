@@ -4,6 +4,7 @@ This repo is a ParaBank UI + API test automation framework (Java 17, Selenium, C
 
 ## Source of truth
 - Follow docs/FRAMEWORK_DESIGN.md for structure, class responsibilities, naming and rules.
+- docs/TEST_PLAN.md lists the test cases to automate. Use its IDs (e.g. TRF-02) as Cucumber tags on each scenario (@TRF-02).
 - If something in the design doesn't work in practice (wrong ParaBank locator, endpoint or message), tell me and propose the fix. Update the design doc in the same commit as the code change.
 
 ## Rules
