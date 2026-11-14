@@ -21,3 +21,6 @@ Thumbs.db
 # Local secrets (never commit)
 .env
 *.secret.properties
+
+# Allure command-line tool, downloaded by mvn allure:serve / allure:report
+.allure/
