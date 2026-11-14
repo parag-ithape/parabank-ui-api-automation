@@ -136,7 +136,7 @@
         <version>3.5.6</version>
         <configuration>
           <suiteXmlFiles>
-            <suiteXmlFile>src/test/resources/suites/testng.xml</suiteXmlFile>
+            <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
           </suiteXmlFiles>
           <!-- AspectJ weaver: without it, Allure @Step annotations on page methods are silently ignored -->
           <argLine>

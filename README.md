@@ -33,16 +33,19 @@ Java 17 · Selenium WebDriver · Cucumber BDD · TestNG · REST Assured · Maven
 ## Project structure
 
 ```
-src/test/resources/features/
-├── ui/       UI scenarios (@ui)
-└── api/      API scenarios (@api)
+Features/               Test scenarios in plain English (.feature), tagged @ui / @api
 src/test/java/
-├── pages/    Selenium page objects (Page Object Model)
-├── api/      REST Assured clients for ParaBank's API
-├── steps/    Step definitions
-├── hooks/    Driver setup, screenshot on failure
-└── utils/    Config and test-data builders
+├── PageObjects/        One class per ParaBank screen
+├── StepDefinitions/    Code behind each Gherkin step
+├── TestRunner/         Cucumber runner + hooks (browser start/stop, screenshots)
+└── Utils/              Config, browser, locators, waits, test data
+src/test/resources/
+├── locators/           One locator file per page
+├── config.properties   Browser, timeouts…  (+ env-public / env-local for the URL)
+└── testng.xml          What runs
 ```
+
+Full design: [docs/FRAMEWORK_DESIGN.md](docs/FRAMEWORK_DESIGN.md) · Test cases: [docs/TEST_PLAN.md](docs/TEST_PLAN.md)
 
 ## How to run
 
@@ -55,7 +58,7 @@ mvn test -Dcucumber.filter.tags="@ui"
 mvn test -Dcucumber.filter.tags="@api"
 ```
 
-The target environment is set by `baseUrl` in `config.properties`: the public ParaBank site, or a local Docker instance (`docker run -d -p 8080:8080 parasoft/parabank`).
+The target environment is the public ParaBank site by default (`env-public.properties`). For a local Docker instance run `docker run -d -p 8080:8080 parasoft/parabank`, then add `-Plocal` to the mvn command.
 
 ## Related projects
 

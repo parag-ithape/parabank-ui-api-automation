@@ -48,7 +48,7 @@
 | G7 | **Rich reporting** | Allure with Gherkin steps, screenshots, page source and API request/response attachments. |
 | G8 | **Security** | No secrets in git. Credentials come from environment variables or GitHub Secrets and are masked in logs and reports. |
 | G9 | **CI-ready** | Runs headless on Linux against a private ParaBank container and publishes the Allure report to GitHub Pages. |
-| G10 | **Reusable core** | The framework core lives in `src/main/java`, so it can later be packaged as a jar and reused for another app. |
+| G10 | **Simple to read** | A flat layout anyone can navigate: `Features/`, `PageObjects/`, `StepDefinitions/`, `TestRunner/`, `Utils/`. The engine is a handful of classes in `Utils/`. |
 
 **Design principles**
 - **Single responsibility:** a page *describes* a screen, an API client *describes* an endpoint, a step *orchestrates and asserts*, and the core *does the plumbing*.
@@ -84,183 +84,87 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                         EXECUTION LAYER                                      │
-│  Maven → Surefire → TestNG suite → Cucumber TestNG runner                    │
-│  Tags select what runs: @ui  @api  @smoke  @regression                       │
+│  EXECUTION   Maven → Surefire → testng.xml → TestRunner (Cucumber on TestNG) │
+│              Tags select what runs: @ui  @api  @smoke  @regression           │
 └───────────────┬──────────────────────────────────────────────────────────────┘
-                │
 ┌───────────────▼──────────────────────────────────────────────────────────────┐
-│               BDD LAYER  (src/test/resources/features + bdd/)                │
-│  features/ui | api | hybrid/*.feature   (Gherkin, business language)         │
-│  steps/ui | api | common   ── call pages or API clients, assert with AssertJ │
-│  hooks/   ── browser only for @ui, screenshot on failure, context cleanup    │
+│  Features/*.feature        Gherkin scenarios in business language            │
+│  StepDefinitions/          call pages or API clients, assert with AssertJ    │
+│  TestRunner/               runner + hooks (browser only for @ui)             │
 └───────────────┬───────────────────────────────────┬──────────────────────────┘
-                │ uses                              │ uses
-┌───────────────▼─────────────────────┐ ┌──────────▼───────────────────────────┐
-│   PAGE LAYER (pages/, components/)  │ │   API LAYER (api/clients, models)    │
-│  LoginPage, AccountsOverviewPage,   │ │  AuthApi, CustomerApi, AccountApi,   │
-│  TransferPage, BillPayPage …        │ │  TransferApi, LoanApi                │
+┌───────────────▼─────────────────────┐ ┌───────────▼──────────────────────────┐
+│  PageObjects/                       │ │  ApiClients/            (phase 3)    │
+│  LoginPage, TransferFundsPage …     │ │  AuthApi, AccountApi, TransferApi …  │
 │  locators/<page>.properties         │ │  TestDataSetup (API-built state)     │
-└───────────────┬─────────────────────┘ └──────────┬───────────────────────────┘
-                │ uses                              │ uses
+└───────────────┬─────────────────────┘ └───────────┬──────────────────────────┘
 ┌───────────────▼───────────────────────────────────▼──────────────────────────┐
-│                  FRAMEWORK CORE  (src/main/java)  ← reusable jar             │
-│  config/   ConfigManager (sysprop + envvar + env file + defaults)            │
-│  driver/   DriverFactory, DriverManager (ThreadLocal), BrowserOptionsFactory │
-│  locators/ LocatorRepository (strategy:value → By)                           │
-│  messages/ Messages (expected UI texts)                                      │
-│  api/      RequestSpecFactory, MaskingLogFilter, ApiConfig                   │
-│  data/     JsonDataReader, SecretResolver, FakeData                          │
-│  actions/  ElementActions, WaitUtils, JsUtils                                │
-│  context/  TestContext (ThreadLocal key/value), ContextKey                   │
-│  listeners/ SuiteTuningListener, AllureEnvironmentListener                   │
-│  reporting/ AllureAttachments                                                │
+│  Utils/   the engine                                                         │
+│  Config  Driver  Locators  Messages  Actions  TestData  ScenarioContext      │
+│  Money  FrameworkException  SuiteListener                                    │
 └───────────────┬──────────────────────────────────────────────────────────────┘
-                │
 ┌───────────────▼──────────────────────────────────────────────────────────────┐
 │  ParaBank: web UI (Chrome | Firefox | Edge) and REST API (/services/bank)    │
 │  Public demo site  ──or──  local / CI Docker container (parasoft/parabank)   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Dependency rule (enforce in code review):** Steps → (Pages | API clients) → Core. The core never imports project code. Pages never import API clients or assertion libraries, and API clients never import pages.
+**Dependency rule (enforce in code review):** StepDefinitions → (PageObjects | ApiClients) → Utils. `Utils` never imports the other folders. Pages never import API clients or assertion libraries, and API clients never import pages.
 
 ---
 
 ## 4. Project Folder Structure
 
+Flat and role-named, so anyone (technical or not) can find things. A folder exists only once it holds a file; the four main folders below are kept from day one so the layout is visible.
+
 ```
 parabank-ui-api-automation/
-├── pom.xml                                   # Build, dependencies, Surefire + Allure config
-├── README.md                                 # What is tested, how to run, report link
-├── .gitignore                                # target/, logs/, allure-results/, IDE files (NEVER pom.xml)
-├── .editorconfig                             # Shared formatting rules
+├── pom.xml                         # Build, dependencies, Surefire + Allure config
+├── README.md                       # What is tested, how to run, report link
+├── .gitignore                      # target/ and IDE files (NEVER pom.xml)
+├── .editorconfig                   # Shared formatting rules
 ├── docs/
-│   └── FRAMEWORK_DESIGN.md                   # This document
-├── .github/workflows/tests.yml               # CI: ParaBank service container + Allure on Pages
+│   ├── FRAMEWORK_DESIGN.md         # This document
+│   └── TEST_PLAN.md                # Test cases; their IDs are Cucumber tags (@TRF-02)
 │
-├── src/main/java/com/parag/framework/        # ===== REUSABLE CORE (no ParaBank-specific code) =====
-│   ├── config/
-│   │   ├── ConfigManager.java                # Loads config.properties + env/<env>.properties; resolution order
-│   │   └── ConfigKeys.java                   # Constants for every config key (no magic strings)
-│   ├── driver/
-│   │   ├── BrowserType.java                  # enum CHROME, FIREFOX, EDGE
-│   │   ├── ExecutionMode.java                # enum LOCAL, GRID
-│   │   ├── BrowserOptionsFactory.java        # Builds ChromeOptions/FirefoxOptions/EdgeOptions (headless, size…)
-│   │   ├── DriverFactory.java                # Creates a WebDriver for (browser, mode)
-│   │   └── DriverManager.java                # ThreadLocal<WebDriver> holder; get/set/quit
-│   ├── locators/
-│   │   ├── LocatorRepository.java            # One instance per page file; key → By
-│   │   └── Locators.java                     # Cache + factory: Locators.forPage("login")
-│   ├── messages/
-│   │   └── Messages.java                     # Messages.get("transfer.complete.title")
-│   ├── api/
-│   │   ├── ApiConfig.java                    # API base path, timeouts
-│   │   ├── RequestSpecFactory.java           # Shared REST Assured request spec
-│   │   └── MaskingLogFilter.java             # Logs requests/responses with secrets masked
-│   ├── data/
-│   │   ├── JsonDataReader.java               # JSON → POJO / List<POJO>
-│   │   ├── SecretResolver.java               # Resolves ${ENV_VAR} placeholders in data/config
-│   │   └── FakeData.java                     # Datafaker wrapper: unique usernames, names, addresses…
-│   ├── actions/
-│   │   ├── WaitUtils.java                    # Explicit/fluent waits only
-│   │   ├── ElementActions.java               # click/type/select with waits + retries + logs
-│   │   └── JsUtils.java                      # JS click, scroll (last resort only)
-│   ├── context/
-│   │   ├── TestContext.java                  # ThreadLocal Map<String,Object> for sharing data within a scenario
-│   │   └── ContextKey.java                   # Constants: CUSTOMER_ID, CHECKING_ACCOUNT_ID …
-│   ├── listeners/
-│   │   ├── SuiteTuningListener.java          # -DdpThreads overrides suite XML parallelism
-│   │   └── AllureEnvironmentListener.java    # Writes environment.properties + categories.json
-│   ├── reporting/
-│   │   └── AllureAttachments.java            # screenshot, page source, browser console logs
-│   ├── exceptions/
-│   │   ├── FrameworkException.java           # Base unchecked exception
-│   │   ├── ConfigException.java
-│   │   ├── LocatorNotFoundException.java
-│   │   └── TestDataException.java
-│   └── utils/
-│       ├── MoneyUtils.java                   # Parse "$1,234.50" → BigDecimal
-│       └── PlaceholderUtils.java             # Safe {0},{1} replacement (XPath-safe, apostrophe-safe)
+├── Features/                       # *.feature files: the tests in plain English
+│   └── login.feature …             #   one file per business capability, tagged @ui / @api
 │
-├── src/main/resources/
-│   └── META-INF/services/org.testng.ITestNGListener   # Auto-registers core listeners (ServiceLoader)
-│
-├── src/test/java/com/parag/parabank/         # ===== PARABANK-SPECIFIC CODE =====
-│   ├── pages/
-│   │   ├── BasePage.java                     # Holds driver, actions, waits, locator repo; isLoaded()
-│   │   ├── LoginPage.java
-│   │   ├── RegisterPage.java
-│   │   ├── AccountsOverviewPage.java
-│   │   ├── OpenAccountPage.java
-│   │   ├── TransferFundsPage.java
-│   │   ├── BillPayPage.java
-│   │   ├── FindTransactionsPage.java
-│   │   └── RequestLoanPage.java
-│   ├── components/
-│   │   ├── BaseComponent.java
-│   │   ├── LeftMenuComponent.java            # "Account Services" navigation
-│   │   └── AccountsTableComponent.java       # Accounts overview table: row lookup, balances
-│   ├── api/
-│   │   ├── clients/
-│   │   │   ├── AuthApi.java
-│   │   │   ├── CustomerApi.java
-│   │   │   ├── AccountApi.java
-│   │   │   ├── TransferApi.java
-│   │   │   └── LoanApi.java
-│   │   ├── models/                           # Customer, Account, Transaction, LoanResponse (records)
-│   │   └── data/
-│   │       └── TestDataSetup.java            # "customer with two accounts and 500.00" via the API
-│   ├── models/                               # UI test-data records: BankCustomer, Payee
-│   └── bdd/
-│       ├── runners/CucumberTestRunner.java
-│       ├── hooks/CucumberHooks.java
-│       └── steps/
-│           ├── common/                       # Shared Given steps (data setup through the API)
-│           ├── ui/                           # UI step definitions
-│           └── api/                          # API step definitions
+├── src/test/java/
+│   ├── PageObjects/                # One class per screen (+ BasePage, shared widgets)
+│   ├── StepDefinitions/            # Gherkin step code: call pages/API, assert with AssertJ
+│   ├── TestRunner/                 # CucumberTestRunner + Hooks (browser start/stop, screenshots)
+│   ├── ApiClients/                 # (phase 3) REST clients, API models, TestDataSetup
+│   └── Utils/                      # The engine
+│       ├── Config.java             #   settings: -D > env var > env-<env>.properties > config.properties
+│       ├── Driver.java             #   start/get/quit the browser, one per thread
+│       ├── Locators.java           #   reads locators/<page>.properties → Selenium By
+│       ├── Messages.java           #   expected UI texts from messages_en.properties
+│       ├── Actions.java            #   click/type/select + ALL explicit waits
+│       ├── TestData.java           #   JSON test data, ${SECRET} placeholders, unique fake values
+│       ├── ScenarioContext.java    #   share values between steps of one scenario
+│       ├── Money.java              #   "$1,234.50" → BigDecimal
+│       ├── FrameworkException.java #   the one error type, with clear messages
+│       ├── SuiteListener.java      #   -DdpThreads + Allure environment/categories
+│       └── LocatorIntegrityTest.java # checks every locator file before any browser starts
 │
 └── src/test/resources/
-    ├── config/
-    │   ├── config.properties                 # Defaults: browser, timeouts, headless…
-    │   └── env/
-    │       ├── public.properties             # baseUrl = public ParaBank site
-    │       └── local.properties              # baseUrl = http://localhost:8080/parabank (Docker / CI)
-    ├── locators/                             # ONE FILE PER PAGE/COMPONENT
-    │   ├── common.properties                 # page title, error panel, generic table row
-    │   ├── login.properties
-    │   ├── register.properties
-    │   ├── accounts-overview.properties
-    │   ├── open-account.properties
-    │   ├── transfer-funds.properties
-    │   ├── bill-pay.properties
-    │   ├── find-transactions.properties
-    │   ├── request-loan.properties
-    │   └── left-menu.properties
-    ├── messages/
-    │   └── messages_en.properties            # Expected UI messages (success, validation, errors)
-    ├── testdata/
-    │   ├── customers.json                    # Customer templates (no real passwords)
-    │   └── payees.json                       # Bill-pay payees
-    ├── schemas/                              # JSON schemas for API contract checks
-    │   ├── account.json
-    │   ├── customer.json
-    │   └── transaction.json
-    ├── features/
-    │   ├── ui/                               # @ui scenarios
-    │   ├── api/                              # @api scenarios
-    │   └── hybrid/                           # @ui @api scenarios
-    ├── suites/
-    │   └── testng.xml                        # Runs the Cucumber runner + LocatorIntegrityTest
-    ├── allure/
-    │   └── categories.json                   # Failure classification for Allure
-    ├── allure.properties                     # Allure results dir
-    └── log4j2.xml                            # Console + rolling run log
+    ├── locators/                   # ONE FILE PER PAGE: common.properties, login.properties …
+    ├── config.properties           # Defaults: browser, timeouts, headless…
+    ├── env-public.properties       # baseUrl = public ParaBank site (default)
+    ├── env-local.properties        # baseUrl = http://localhost:8080/parabank (Docker / CI)
+    ├── messages_en.properties      # Expected UI messages
+    ├── testdata/                   # (when needed) customers.json, payees.json
+    ├── schemas/                    # (phase 3) JSON schemas for API contract checks
+    ├── testng.xml                  # Runs LocatorIntegrityTest, then the scenarios
+    ├── log4j2.xml                  # Console + run log under target/logs
+    ├── allure.properties           # Allure results dir
+    ├── allure-categories.json      # Failure groups on the Allure "Categories" tab
+    └── META-INF/services/org.testng.ITestNGListener   # registers Utils.SuiteListener
 ```
 
-**Why `src/main/java` for the core?** Classes in `src/test` can't be packaged and reused. With the core in `src/main`, you can later run `mvn install` and add it as a dependency to another project, or split it into a `framework-core` Maven module.
+**Not in the repo on purpose:** driver `.exe` files (Selenium Manager downloads drivers), and `logs/`, `Reports/`, `test-output/` (all generated output lives under `target/`).
 
----
+> **Naming note:** folders are PascalCase (`PageObjects`, `Utils`) for readability, so Java packages are `PageObjects`, `Utils`, … instead of the usual lower-case reverse-domain names. This is a deliberate trade-off for a single, self-contained test project.
 
 ## 5. Build Configuration (pom.xml)
 
@@ -323,7 +227,7 @@ parabank-ui-api-automation/
       <version>${cucumber.version}</version>
     </dependency>
 
-    <!-- Test engine. Compile scope because listeners in src/main implement TestNG interfaces. -->
+    <!-- Test engine -->
     <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
@@ -403,7 +307,7 @@ parabank-ui-api-automation/
         <version>3.5.6</version>
         <configuration>
           <suiteXmlFiles>
-            <suiteXmlFile>src/test/resources/suites/testng.xml</suiteXmlFile>
+            <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
           </suiteXmlFiles>
           <!-- AspectJ weaver: without it, Allure @Step annotations on page methods are silently ignored -->
           <argLine>
@@ -451,7 +355,7 @@ parabank-ui-api-automation/
 
 ### 6.1 Files
 
-**`src/test/resources/config/config.properties`**: defaults shared by all environments
+**`src/test/resources/config.properties`**: defaults shared by all environments
 ```properties
 # ================= Browser / Execution =================
 # chrome | firefox | edge
@@ -488,12 +392,12 @@ attach.page.source.on.failure=true
 messages.locale=en
 ```
 
-**`src/test/resources/config/env/public.properties`**: the shared public demo site
+**`src/test/resources/env-public.properties`**: the shared public demo site
 ```properties
 baseUrl=https://parabank.parasoft.com/parabank
 ```
 
-**`src/test/resources/config/env/local.properties`**: Docker on a laptop or a service container in CI
+**`src/test/resources/env-local.properties`**: Docker on a laptop or a service container in CI
 ```properties
 baseUrl=http://localhost:8080/parabank
 ```
@@ -505,86 +409,27 @@ baseUrl=http://localhost:8080/parabank
 ```
 1. JVM system property        -Dbrowser=firefox        (CI / command line)
 2. Environment variable       BROWSER=firefox          (key upper-cased, '.' → '_')
-3. env/<env>.properties       env selected by -Denv=local (default public)
+3. env-<env>.properties       env selected by -Denv=local or -Plocal (default public)
 4. config.properties          defaults
-→ missing everywhere  ⇒  ConfigException("Missing config key: …")   (fail fast)
+→ missing everywhere  ⇒  FrameworkException("Missing config key: …")   (fail fast)
 ```
 
-### 6.3 `ConfigManager.java`
+### 6.3 `Utils/Config.java`
+
+`Utils/Config.java` loads `config.properties` and `env-<env>.properties` once from the classpath (works on any OS and in CI) and is read-only afterwards, so it is safe for parallel threads. Key names are constants on the class, so no code types a key by hand.
 
 ```java
-package com.parag.framework.config;
-
-import com.parag.framework.exceptions.ConfigException;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
-
-/**
- * Central, read-only access point for all configuration.
- *
- * <p>Loads files from the CLASSPATH, not from file-system paths, so it works on Windows,
- * Linux CI runners and inside jars.</p>
- *
- * <p>Thread-safe: the Properties object is loaded once in a static initialiser and only read afterwards.</p>
- */
-public final class ConfigManager {
-
-    private static final String DEFAULT_FILE = "config/config.properties";
-    private static final String ENV_FILE_PATTERN = "config/env/%s.properties";
-    private static final Properties PROPS = load();
-
-    private ConfigManager() { }
-
-    /** Active environment name (public, local). Set with -Denv or the ENV variable. */
-    public static String env() {
-        String env = System.getProperty("env", System.getenv("ENV"));
-        return (env == null || env.isBlank()) ? "public" : env.trim().toLowerCase();
-    }
-
-    private static Properties load() {
-        Properties p = new Properties();
-        loadInto(p, DEFAULT_FILE);                              // defaults first
-        loadInto(p, String.format(ENV_FILE_PATTERN, env()));    // env file overrides defaults
-        return p;
-    }
-
-    private static void loadInto(Properties target, String resource) {
-        try (InputStream in = ConfigManager.class.getClassLoader().getResourceAsStream(resource)) {
-            if (in == null) throw new ConfigException("Config file not found on classpath: " + resource);
-            target.load(in);
-        } catch (IOException e) {
-            throw new ConfigException("Unable to read config file: " + resource, e);
-        }
-    }
-
-    /** Returns the resolved value or throws ConfigException if the key is missing everywhere. */
-    public static String get(String key) {
-        String sys = System.getProperty(key);
-        if (sys != null && !sys.isBlank()) return sys.trim();
-
-        String envVar = System.getenv(key.toUpperCase().replace('.', '_'));
-        if (envVar != null && !envVar.isBlank()) return envVar.trim();
-
-        String fileValue = PROPS.getProperty(key);
-        if (fileValue == null) throw new ConfigException("Missing config key: " + key + " (env=" + env() + ")");
-        return fileValue.trim();
-    }
-
-    public static String get(String key, String defaultValue) {
-        try { return get(key); } catch (ConfigException e) { return defaultValue; }
-    }
-
-    public static int getInt(String key)         { return Integer.parseInt(get(key)); }
-    public static boolean getBoolean(String key) { return Boolean.parseBoolean(get(key)); }
-}
+String url   = Config.get(Config.BASE_URL);
+int timeout  = Config.getInt(Config.TIMEOUT_EXPLICIT);
+boolean head = Config.getBoolean(Config.HEADLESS);
+String loc   = Config.get(Config.MESSAGES_LOCALE, "en");   // with a default
+String env   = Config.env();                               // public | local
 ```
 
 ### 6.4 Secrets
 - Passwords and tokens **never** go into git.
-- Data files refer to them as `${PARABANK_PASSWORD}`, and `SecretResolver` (§10) replaces the placeholder from an environment variable or system property at runtime.
-- Customers created by the suite get **generated** passwords (`FakeData`), so most scenarios need no secret at all.
+- Data files refer to them as `${PARABANK_PASSWORD}`, and `TestData.resolveSecrets` (§10) replaces the placeholder from an environment variable or system property at runtime.
+- Customers created by the suite get **generated** passwords (`TestData.password()`), so most scenarios need no secret at all.
 - In CI, any secret comes from GitHub Secrets. Locally, export it in your shell or IDE run configuration (**not** a committed `.env` file).
 - Mask secrets: override `toString()` on models that hold passwords, never put a password in an Allure `@Step` title, and log API calls through `MaskingLogFilter` (§14).
 
@@ -592,164 +437,20 @@ public final class ConfigManager {
 
 ## 7. Driver Management
 
-### 7.1 `BrowserType.java` / `ExecutionMode.java`
+`Utils/Driver.java` is the only class that creates browsers. It holds **one browser per thread** (`ThreadLocal`): with a static WebDriver, parallel scenario A would click in scenario B's browser.
+
 ```java
-package com.parag.framework.driver;
-
-/** Supported browsers. from() gives a clear error for typos such as "chorme". */
-public enum BrowserType {
-    CHROME, FIREFOX, EDGE;
-
-    public static BrowserType from(String value) {
-        try {
-            return BrowserType.valueOf(value.trim().toUpperCase());
-        } catch (IllegalArgumentException | NullPointerException e) {
-            throw new IllegalArgumentException("Unsupported browser: '" + value + "'. Use chrome|firefox|edge");
-        }
-    }
-}
-
-/** Where the browser runs: on this machine or on a Selenium Grid. */
-public enum ExecutionMode {
-    LOCAL, GRID;
-    public static ExecutionMode from(String v) { return ExecutionMode.valueOf(v.trim().toUpperCase()); }
-}
+Driver.start();        // @Before hook of @ui scenarios: browser, headless, size, local|grid from config
+Driver.get();          // pages get the current thread's browser
+Driver.isStarted();    // hooks: is there a browser to screenshot?
+Driver.quit();         // @After hook, ALWAYS: quits and frees the thread (no dead browser for the next scenario)
 ```
 
-### 7.2 `BrowserOptionsFactory.java`
-```java
-package com.parag.framework.driver;
-
-/**
- * Builds browser-specific options in ONE place. The same options are used locally and on a Grid,
- * so behaviour is identical everywhere.
- */
-public final class BrowserOptionsFactory {
-
-    private BrowserOptionsFactory() { }
-
-    public static MutableCapabilities create(BrowserType browser) {
-        boolean headless = ConfigManager.getBoolean("headless");
-        String size = ConfigManager.get("window.width") + "," + ConfigManager.get("window.height");
-        PageLoadStrategy pls = PageLoadStrategy.fromString(ConfigManager.get("page.load.strategy"));
-
-        return switch (browser) {
-            case CHROME -> {
-                ChromeOptions o = new ChromeOptions();
-                if (headless) o.addArguments("--headless=new");          // new headless = same engine as headed
-                o.addArguments("--window-size=" + size, "--disable-notifications");
-                o.setPageLoadStrategy(pls);
-                yield o;
-            }
-            case EDGE -> {
-                EdgeOptions o = new EdgeOptions();                        // Chromium based → same flags as Chrome
-                if (headless) o.addArguments("--headless=new");
-                o.addArguments("--window-size=" + size);
-                o.setPageLoadStrategy(pls);
-                yield o;
-            }
-            case FIREFOX -> {
-                FirefoxOptions o = new FirefoxOptions();
-                if (headless) o.addArguments("-headless");
-                o.addArguments("--width=" + ConfigManager.get("window.width"),
-                               "--height=" + ConfigManager.get("window.height"));
-                o.setPageLoadStrategy(pls);
-                yield o;
-            }
-        };
-    }
-}
-```
-
-### 7.3 `DriverFactory.java`
-```java
-package com.parag.framework.driver;
-
-/**
- * Creates fully configured WebDriver instances. This is the ONLY class that calls "new XxxDriver".
- * Selenium Manager (built into Selenium 4.6+) resolves driver binaries automatically,
- * so no driver .exe files are committed to the repo.
- */
-public final class DriverFactory {
-
-    private DriverFactory() { }
-
-    public static WebDriver create(BrowserType browser) {
-        ExecutionMode mode = ExecutionMode.from(ConfigManager.get("execution.mode"));
-        MutableCapabilities options = BrowserOptionsFactory.create(browser);
-
-        WebDriver driver = switch (mode) {
-            case LOCAL -> createLocal(browser, options);
-            case GRID  -> createRemote(ConfigManager.get("grid.url"), options);
-        };
-
-        // Timeouts. Note: NO implicit wait (explicit waits only, see WaitUtils).
-        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(ConfigManager.getInt("timeout.pageload")));
-        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(ConfigManager.getInt("timeout.script")));
-        return driver;
-    }
-
-    private static WebDriver createLocal(BrowserType browser, Capabilities options) {
-        return switch (browser) {
-            case CHROME  -> new ChromeDriver((ChromeOptions) options);
-            case FIREFOX -> new FirefoxDriver((FirefoxOptions) options);
-            case EDGE    -> new EdgeDriver((EdgeOptions) options);
-        };
-    }
-
-    private static WebDriver createRemote(String url, Capabilities options) {
-        try {
-            return new RemoteWebDriver(URI.create(url).toURL(), options);
-        } catch (MalformedURLException e) {
-            throw new FrameworkException("Invalid remote WebDriver URL: " + url, e);
-        }
-    }
-}
-```
-
-### 7.4 `DriverManager.java`: the heart of parallel safety
-```java
-package com.parag.framework.driver;
-
-/**
- * Holds one WebDriver PER THREAD.
- *
- * <p>Why ThreadLocal: scenarios run in parallel on a thread pool. A static WebDriver field would be
- * shared by all threads, so scenario A would click in scenario B's browser. ThreadLocal gives every
- * thread its own browser.</p>
- *
- * <p>Always call quit() in the @After hook. It also calls remove() so pooled threads don't keep a
- * dead driver (memory leak / "session not found" errors).</p>
- */
-public final class DriverManager {
-
-    private static final ThreadLocal<WebDriver> DRIVER = new ThreadLocal<>();
-
-    private DriverManager() { }
-
-    public static WebDriver getDriver() {
-        WebDriver driver = DRIVER.get();
-        if (driver == null) {
-            throw new IllegalStateException("WebDriver not initialised for thread " + Thread.currentThread().getName()
-                    + ". Is the scenario tagged @ui? Is the page created inside a step?");
-        }
-        return driver;
-    }
-
-    public static void setDriver(WebDriver driver) { DRIVER.set(driver); }
-
-    public static boolean hasDriver() { return DRIVER.get() != null; }
-
-    public static void quit() {
-        WebDriver driver = DRIVER.get();
-        if (driver != null) {
-            try { driver.quit(); } finally { DRIVER.remove(); }
-        }
-    }
-}
-```
-
----
+- **Browsers:** `-Dbrowser=chrome|firefox|edge` (`Driver.Browser.from(..)` gives a clear error for typos like "chorme").
+- **Where:** `execution.mode=local` or `grid` (with `grid.url`).
+- **Options:** headless, window size and page-load strategy are set inside `Driver` and nowhere else, identically for local and Grid.
+- **No driver binaries:** Selenium Manager (Selenium 4.6+) downloads the matching driver.
+- **No implicit wait:** only page-load and script timeouts are set; all waiting is explicit, in `Actions`.
 
 ## 8. Locator Repository
 
@@ -759,7 +460,7 @@ Locators live in **separate files, one per page or component**, not in Java code
 |---|---|
 | File layout | **1 file per page/component** (`locators/<page>.properties`) |
 | Strategy | `id`, `name`, `css`, `xpath`, `linkText`, `partialLinkText`, `className`, `tagName` |
-| Missing key | `LocatorNotFoundException("login.username.input")` **at page construction** |
+| Missing key | `FrameworkException("Missing locator key: login.username.input")` **at page construction** |
 | Dynamic locators | `{0}`, `{1}` placeholders in the file |
 | Validation | `LocatorIntegrityTest` checks that every file and value parses (runs before the scenarios) |
 
@@ -802,97 +503,25 @@ table.row.byText=xpath://table//tr[td[normalize-space()='{0}']]
 menu.link.byText=linkText:{0}
 ```
 
-### 8.2 `LocatorRepository.java` / `Locators.java`
+### 8.2 `Utils/Locators.java`
+
+`Utils/Locators.java` reads one page file and converts `strategy:value` to a Selenium `By`. Each file is read once, cached, and shared read-only by all threads.
+
 ```java
-package com.parag.framework.locators;
-
-/** Holds the locators of ONE page file and converts "strategy:value" strings to Selenium By objects. */
-public final class LocatorRepository {
-
-    private final String pageName;
-    private final Properties entries;
-
-    LocatorRepository(String pageName) {
-        this.pageName = pageName;
-        this.entries = new Properties();
-        String resource = "locators/" + pageName + ".properties";
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream(resource)) {
-            if (in == null) throw new LocatorNotFoundException("Locator file not found: " + resource);
-            entries.load(in);
-        } catch (IOException e) {
-            throw new LocatorNotFoundException("Cannot read locator file: " + resource, e);
-        }
-    }
-
-    /**
-     * @param key  key inside the page file, e.g. "login.button"
-     * @param args values for {0},{1}… placeholders (for dynamic locators)
-     */
-    public By by(String key, Object... args) {
-        String raw = entries.getProperty(key);
-        if (raw == null) throw new LocatorNotFoundException(pageName + "." + key);
-        // PlaceholderUtils, NOT MessageFormat: MessageFormat treats single quotes as escape characters
-        // and would silently break XPaths such as //td[text()='{0}'].
-        String resolved = PlaceholderUtils.fill(raw, args);
-        return toBy(key, resolved);
-    }
-
-    private By toBy(String key, String raw) {
-        int sep = raw.indexOf(':');                       // split on the FIRST ':' only (XPath may contain ':')
-        if (sep < 1) throw new LocatorNotFoundException("Bad locator format for " + pageName + "." + key + " → " + raw);
-        String strategy = raw.substring(0, sep).trim();
-        String value = raw.substring(sep + 1).trim();
-        return switch (strategy.toLowerCase()) {
-            case "id"              -> By.id(value);
-            case "name"            -> By.name(value);
-            case "css"             -> By.cssSelector(value);
-            case "xpath"           -> By.xpath(value);
-            case "linktext"        -> By.linkText(value);
-            case "partiallinktext" -> By.partialLinkText(value);
-            case "classname"       -> By.className(value);
-            case "tagname"         -> By.tagName(value);
-            default -> throw new LocatorNotFoundException("Unknown strategy '" + strategy + "' in " + pageName + "." + key);
-        };
-    }
-
-    /** Used by LocatorIntegrityTest to validate every entry without a browser. */
-    public Set<String> keys() { return entries.stringPropertyNames(); }
-}
+Locators login  = Locators.forPage("login");                 // locators/login.properties
+By button       = login.by("login.button");                  // login.button=css:input[value='Log In']
+By row          = Locators.forPage("common").by("table.row.byText", "Savings");   // fills {0}
 ```
-```java
-package com.parag.framework.locators;
 
-/** Cache of LocatorRepository objects. Each file is read once and then shared read-only by all threads. */
-public final class Locators {
-    private static final Map<String, LocatorRepository> CACHE = new ConcurrentHashMap<>();
-    private Locators() { }
-
-    public static LocatorRepository forPage(String pageName) {
-        return CACHE.computeIfAbsent(pageName, LocatorRepository::new);
-    }
-}
-```
-```java
-package com.parag.framework.utils;
-
-/** Replaces {0},{1}… literally. Safe for XPath quotes and for apostrophes in messages. */
-public final class PlaceholderUtils {
-    private PlaceholderUtils() { }
-    public static String fill(String template, Object... args) {
-        String result = template;
-        for (int i = 0; args != null && i < args.length; i++) {
-            result = result.replace("{" + i + "}", String.valueOf(args[i]));
-        }
-        return result;
-    }
-}
-```
+- Splits on the **first** `:` only, because XPath values may contain more.
+- Placeholders are filled literally by `Messages.fill(..)`, **not** `MessageFormat`, which treats single quotes as escapes and would silently break XPaths such as `//td[text()='{0}']`.
+- Unknown strategy, missing `:`, empty value or missing key → `FrameworkException` naming the page and key.
 
 ### 8.3 Locator integrity test (catches broken locators before the scenarios run)
 ```java
-// src/test/java/com/parag/parabank/framework/LocatorIntegrityTest.java
+// src/test/java/Utils/LocatorIntegrityTest.java
 // Parses EVERY key in EVERY locators/*.properties file. No browser needed, runs in under a second.
-// Listed first in suites/testng.xml, so a typo fails the build before any browser starts.
+// Listed first in testng.xml, so a typo fails the build before any browser starts.
 // Collects ALL bad entries and reports them in one AssertJ failure, instead of stopping at the first.
 // Also fails when the folder or the file list is empty, so it can never pass vacuously.
 public class LocatorIntegrityTest {
@@ -910,7 +539,7 @@ public class LocatorIntegrityTest {
         for (Path file : files) {
             String page = file.getFileName().toString().replace(".properties", "");
             try {
-                LocatorRepository repo = Locators.forPage(page);
+                Locators repo = Locators.forPage(page);
                 if (repo.keys().isEmpty()) problems.add(page + ": file has no locator entries");
                 for (String key : repo.keys()) {
                     try { repo.by(key, "x", "y", "z"); }                 // throws on bad strategy/format/empty value
@@ -929,11 +558,11 @@ public class LocatorIntegrityTest {
 
 ## 9. Message Repository
 
-Expected UI texts (confirmation titles, validation errors) live in **`messages/messages_en.properties`**. Steps compare UI text against these keys, so a wording change in the app is a **one-line fix**.
+Expected UI texts (confirmation titles, validation errors) live in **`messages_en.properties`**. Steps compare UI text against these keys, so a wording change in the app is a **one-line fix**.
 
 > Confirm each text against the live app while building; the values below show the format.
 
-**`src/test/resources/messages/messages_en.properties`**
+**`src/test/resources/messages_en.properties`**
 ```properties
 # ============ Login ============
 login.error.invalid=The username and password could not be verified.
@@ -952,38 +581,11 @@ loan.approved.status=Approved
 loan.denied.status=Denied
 ```
 
+`Utils/Messages.java` loads `messages_<messages.locale>.properties` as UTF-8, once:
+
 ```java
-package com.parag.framework.messages;
-
-/**
- * Expected UI messages. The locale comes from config (messages.locale).
- * Files are read as UTF-8 so accented characters work.
- */
-public final class Messages {
-
-    private static final Properties MESSAGES = load(ConfigManager.get("messages.locale", "en"));
-
-    private Messages() { }
-
-    private static Properties load(String locale) {
-        String resource = "messages/messages_" + locale + ".properties";
-        try (InputStream in = Messages.class.getClassLoader().getResourceAsStream(resource)) {
-            if (in == null) throw new FrameworkException("Messages file not found: " + resource);
-            Properties p = new Properties();
-            p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-            return p;
-        } catch (IOException e) {
-            throw new FrameworkException("Cannot load messages: " + resource, e);
-        }
-    }
-
-    /** Messages.get("register.success.title", "bdd_user_1731") */
-    public static String get(String key, Object... args) {
-        String msg = MESSAGES.getProperty(key);
-        if (msg == null) throw new FrameworkException("Missing message key: " + key);
-        return PlaceholderUtils.fill(msg, args);
-    }
-}
+Messages.get("login.error.invalid")
+Messages.get("register.success.title", username)   // fills {0}
 ```
 
 ---
@@ -996,8 +598,8 @@ public final class Messages {
 |---|---|---|---|
 | Customer templates | JSON | `testdata/customers.json` | address, phone, SSN pattern |
 | Bill-pay payees | JSON | `testdata/payees.json` | name, address, account number |
-| Unique values (username, names) | Generated | `FakeData` | `FakeData.username()` → `bdd_1731..._7` |
-| Starting state (accounts, balances) | API | `api/data/TestDataSetup` | customer with checking 500.00 + empty savings |
+| Unique values (username, names) | Generated | `TestData` | `TestData.username()` → `bdd_1731..._7_3` |
+| Starting state (accounts, balances) | API | `ApiClients/TestDataSetup` | customer with checking 500.00 + empty savings |
 | Secrets (if any) | Env vars | `${VAR}` placeholders | `${PARABANK_PASSWORD}` |
 
 **Rules:**
@@ -1022,7 +624,7 @@ public final class Messages {
 
 ### 10.3 Model
 ```java
-package com.parag.parabank.models;
+package PageObjects;   // UI test-data records live next to the pages that use them
 
 /** Immutable customer record. toString() masks the password, so it never appears in Allure parameters or logs. */
 public record BankCustomer(String firstName, String lastName, String street, String city, String state,
@@ -1033,229 +635,43 @@ public record BankCustomer(String firstName, String lastName, String street, Str
 }
 ```
 
-### 10.4 `JsonDataReader.java` + `SecretResolver.java`
+### 10.4 `Utils/TestData.java`
+
+`Utils/TestData.java` does three jobs:
+
 ```java
-package com.parag.framework.data;
+// 1. JSON files from the classpath → records/POJOs (unknown fields ignored)
+List<CustomerTemplate> all = TestData.readList("testdata/customers.json", CustomerTemplate.class);
+Payee payee = TestData.read("testdata/payee.json", Payee.class);
 
-/** Reads JSON from the classpath and maps it to POJOs/records. ${VAR} placeholders are resolved first. */
-public final class JsonDataReader {
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+// 2. ${NAME} placeholders in that JSON are replaced from -DNAME or the NAME env variable
+//    (fails fast naming the variable, never printing a value)
+String text = TestData.resolveSecrets("password=${PARABANK_PASSWORD}");
 
-    private JsonDataReader() { }
-
-    public static <T> List<T> readList(String resource, Class<T> type) {
-        try {
-            String json = SecretResolver.resolve(readResource(resource));
-            return MAPPER.readValue(json, MAPPER.getTypeFactory().constructCollectionType(List.class, type));
-        } catch (IOException e) {
-            throw new TestDataException("Cannot parse test data: " + resource, e);
-        }
-    }
-
-    public static <T> T read(String resource, Class<T> type) { /* same idea, single object */ }
-
-    private static String readResource(String resource) throws IOException {
-        try (InputStream in = JsonDataReader.class.getClassLoader().getResourceAsStream(resource)) {
-            if (in == null) throw new TestDataException("Test data not found: " + resource);
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-}
-```
-```java
-package com.parag.framework.data;
-
-/** Replaces ${NAME} with System.getProperty(NAME) or System.getenv(NAME). Fails fast if neither is set. */
-public final class SecretResolver {
-    private static final Pattern P = Pattern.compile("\\$\\{([A-Z0-9_]+)}");
-    private SecretResolver() { }
-
-    public static String resolve(String text) {
-        Matcher m = P.matcher(text);
-        StringBuilder sb = new StringBuilder();
-        while (m.find()) {
-            String name = m.group(1);
-            String value = Optional.ofNullable(System.getProperty(name)).orElse(System.getenv(name));
-            if (value == null) throw new TestDataException("Secret/env variable not set: " + name);
-            m.appendReplacement(sb, Matcher.quoteReplacement(value));
-        }
-        m.appendTail(sb);
-        return sb.toString();
-    }
-}
-```
-
-### 10.5 `FakeData.java`
-```java
-package com.parag.framework.data;
-
-/** Unique, parallel-safe data. Time + thread id + a JVM-wide counter: no collision even when one thread generates twice in the same millisecond. */
-public final class FakeData {
-    private static final Faker FAKER = new Faker();
-    private static final AtomicInteger SEQUENCE = new AtomicInteger();
-    private FakeData() { }
-
-    public static String username() {
-        return "bdd_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId() + "_" + SEQUENCE.incrementAndGet();
-    }
-    // internet().password(int,int,boolean,boolean,boolean) is deprecated for removal in Datafaker 2.7: use a text rule
-    private static final Text.TextRuleConfig PASSWORD_RULE = Text.TextSymbolsBuilder.builder()
-            .len(12).with(Text.EN_UPPERCASE, 1).with(Text.EN_LOWERCASE, 1).with(Text.DIGITS, 1).build();
-
-    public static String password()  { return "Pw!" + FAKER.text().text(PASSWORD_RULE); }
-    public static String firstName() { return FAKER.name().firstName(); }
-    public static String lastName()  { return FAKER.name().lastName(); }
-}
+// 3. Unique, parallel-safe generated values
+TestData.username();    // "bdd_" + millis + thread id + JVM-wide counter: unique even in the same millisecond
+TestData.password();    // "Pw!" + 12 chars with upper, lower and digit (Datafaker text rule)
+TestData.firstName();  TestData.lastName();
 ```
 
 ---
 
 ## 11. Core Utilities
 
-### 11.1 `WaitUtils.java`
-```java
-package com.parag.framework.actions;
+### 11.1 `Utils/Actions.java`: every interaction and every wait
+Pages never call `driver.findElement(..).click()`. They call `Actions`, so waiting, retries and logging live in one place. One instance per page object (so per scenario thread).
 
-/**
- * ALL synchronisation goes through this class. Rules:
- *  - No implicit waits anywhere (Selenium docs: mixing them gives unpredictable wait times).
- *  - No Thread.sleep(): slow AND flaky.
- *  - Polls every 250 ms and ignores stale elements while waiting.
- */
-public class WaitUtils {
+| Group | Methods |
+|---|---|
+| Interact | `click(by)` (retries on stale/intercepted, `click.retry.count`), `type(by, text)`, `typeSecret(by, secret)` (logs `******`), `selectByText`, `selectByValue` |
+| Read | `text(by)`, `attribute(by, name)` (DOM attribute), `value(by)` (live input value), `optionTexts(by)`, `isDisplayed(by)` (never throws) |
+| Wait | `waitVisible`, `waitClickable`, `waitPresent`, `waitAllVisible`, `waitInvisible`, `waitText`, `waitUrlContains`, `waitOptionsLoaded` (ParaBank fills account dropdowns late), `waitPageReady`, `waitUntil(condition, description)` |
+| Last resort | `jsClick(by)`, `scrollIntoView(by)`: say why at the call site |
 
-    private final WebDriver driver;
-    private final Duration timeout = Duration.ofSeconds(ConfigManager.getInt("timeout.explicit"));
-    private final Duration polling = Duration.ofMillis(ConfigManager.getInt("timeout.polling.millis"));
-    private final WebDriverWait wait;
+**Waiting rules:** explicit waits only (`timeout.explicit`, polling `timeout.polling.millis`, stale elements ignored while waiting). No implicit waits (mixing them gives unpredictable wait times) and no `Thread.sleep` (slow and flaky). `waitUntil` builds a fresh wait each time, because `withMessage()` changes the wait it is called on and the message would otherwise stick to later timeouts. `WebElement.getAttribute` is deprecated since Selenium 4.27, hence `getDomAttribute` / `getDomProperty`.
 
-    public WaitUtils(WebDriver driver) {
-        this.driver = driver;
-        this.wait = new WebDriverWait(driver, timeout, polling);
-        this.wait.ignoring(StaleElementReferenceException.class);
-    }
-
-    public WebElement visible(By by)      { return wait.until(ExpectedConditions.visibilityOfElementLocated(by)); }
-    public WebElement clickable(By by)    { return wait.until(ExpectedConditions.elementToBeClickable(by)); }
-    public WebElement present(By by)      { return wait.until(ExpectedConditions.presenceOfElementLocated(by)); }
-    public List<WebElement> allVisible(By by) { return wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(by)); }
-    public boolean invisible(By by)       { return wait.until(ExpectedConditions.invisibilityOfElementLocated(by)); }
-    public boolean textPresent(By by, String text) { return wait.until(ExpectedConditions.textToBePresentInElementLocated(by, text)); }
-    public boolean urlContains(String part) { return wait.until(ExpectedConditions.urlContains(part)); }
-
-    /** ParaBank fills some dropdowns (account lists) after the page loads: wait until options exist. */
-    public void optionsLoaded(By select) {
-        until(d -> new Select(d.findElement(select)).getOptions().size() > 0, "Options loaded in " + select);
-    }
-
-    /** Waits for document.readyState == complete. */
-    public void pageReady() {
-        wait.until(d -> "complete".equals(((JavascriptExecutor) d).executeScript("return document.readyState")));
-    }
-
-    /**
-     * Custom condition with a readable timeout message. Uses a FRESH wait: withMessage() mutates the wait
-     * it is called on, so on the shared wait the message would stick to every later timeout.
-     */
-    public <T> T until(Function<WebDriver, T> condition, String description) {
-        WebDriverWait w = new WebDriverWait(driver, timeout, polling);
-        w.ignoring(StaleElementReferenceException.class);
-        w.withMessage(description);
-        return w.until(condition);
-    }
-}
-```
-
-### 11.2 `ElementActions.java`
-```java
-package com.parag.framework.actions;
-
-/**
- * Every interaction with the browser goes through here, so waits, retries and logging live in ONE place.
- * Pages call these methods and never call driver.findElement(...).click() directly.
- */
-public class ElementActions {
-
-    private static final Logger LOG = LogManager.getLogger(ElementActions.class);
-    private final WebDriver driver;
-    private final WaitUtils wait;
-    private final int clickRetries = ConfigManager.getInt("click.retry.count");
-
-    public ElementActions(WebDriver driver, WaitUtils wait) { this.driver = driver; this.wait = wait; }
-
-    /** Click with a retry on stale/intercepted elements (page re-renders, overlays). */
-    public void click(By by) {
-        for (int attempt = 1; ; attempt++) {
-            try {
-                wait.clickable(by).click();
-                LOG.info("Clicked {}", by);
-                return;
-            } catch (StaleElementReferenceException | ElementClickInterceptedException e) {
-                if (attempt >= clickRetries) throw e;
-                LOG.warn("Retry {}/{} click on {} due to {}", attempt, clickRetries, by, e.getClass().getSimpleName());
-            }
-        }
-    }
-
-    /** Clears, then types. Use typeSecret() for passwords so the value is never logged. */
-    public void type(By by, String text) {
-        WebElement el = wait.visible(by);
-        el.clear();
-        el.sendKeys(text);
-        LOG.info("Typed '{}' into {}", text, by);
-    }
-
-    public void typeSecret(By by, String secret) {
-        WebElement el = wait.visible(by);
-        el.clear();
-        el.sendKeys(secret);
-        LOG.info("Typed ****** into {}", by);
-    }
-
-    public String text(By by)                { return wait.visible(by).getText().trim(); }
-    // getAttribute() is deprecated since Selenium 4.27: use the DOM attribute (markup) or DOM property (live value)
-    public String attribute(By by, String a) { return wait.present(by).getDomAttribute(a); }
-    public String value(By by)               { return wait.present(by).getDomProperty("value"); }
-
-    /** Non-throwing visibility check: returns false instead of throwing when the element is absent. */
-    public boolean isDisplayed(By by) {
-        try { return !driver.findElements(by).isEmpty() && driver.findElement(by).isDisplayed(); }
-        catch (StaleElementReferenceException e) { return false; }
-    }
-
-    public void selectByText(By by, String visibleText)  { new Select(wait.visible(by)).selectByVisibleText(visibleText); }
-    public void selectByValue(By by, String value)        { new Select(wait.visible(by)).selectByValue(value); }
-    public List<String> optionTexts(By by) {
-        return new Select(wait.visible(by)).getOptions().stream().map(WebElement::getText).toList();
-    }
-}
-```
-
-### 11.3 `JsUtils.java`
-```java
-/** Use JavaScript ONLY as a last resort (it bypasses real user behaviour). Document why at each call site. */
-public class JsUtils {
-    private final JavascriptExecutor js;
-    public JsUtils(WebDriver driver) { this.js = (JavascriptExecutor) driver; }
-    public void click(WebElement el)          { js.executeScript("arguments[0].click();", el); }
-    public void scrollIntoView(WebElement el) { js.executeScript("arguments[0].scrollIntoView({block:'center'});", el); }
-}
-```
-
-### 11.4 `MoneyUtils.java`
-```java
-/** Bank amounts are always BigDecimal: never double, which loses cents to rounding. */
-public final class MoneyUtils {
-    private MoneyUtils() { }
-
-    /** "$1,234.50" or "-$20.00" → BigDecimal */
-    public static BigDecimal parse(String uiText) {
-        String cleaned = uiText.replace("$", "").replace(",", "").trim();
-        return new BigDecimal(cleaned);
-    }
-}
-```
+### 11.2 `Utils/Money.java`
+Bank amounts are always `BigDecimal`, never `double` (which loses cents). `Money.parse("$1,234.50")` → `1234.50`, `Money.parse("-$20.00")` → `-20.00`; unreadable text throws `FrameworkException` quoting it.
 
 ---
 
@@ -1271,30 +687,26 @@ public final class MoneyUtils {
 
 ### 12.2 `BasePage.java`
 ```java
-package com.parag.parabank.pages;
+package PageObjects;
 
 /**
  * Parent of all pages. It gives every page:
- *  - the current thread's driver (from DriverManager, never a copied static field)
- *  - waits / actions / js helpers
- *  - its own LocatorRepository (file name = pageName)
+ *  - the current thread's driver (from Driver.get(), never a copied static field)
+ *  - Actions (interactions + waits)
+ *  - its own Locators (file name = pageName)
  *  - the shared "common" locators
  */
 public abstract class BasePage {
 
     protected final WebDriver driver;
-    protected final WaitUtils wait;
-    protected final ElementActions actions;
-    protected final JsUtils js;
-    protected final LocatorRepository loc;
-    protected final LocatorRepository common = Locators.forPage("common");
+    protected final Actions actions;
+    protected final Locators loc;
+    protected final Locators common = Locators.forPage("common");
     protected final Logger log = LogManager.getLogger(getClass());
 
     protected BasePage(String pageName) {
-        this.driver = DriverManager.getDriver();
-        this.wait = new WaitUtils(driver);
-        this.actions = new ElementActions(driver, wait);
-        this.js = new JsUtils(driver);
+        this.driver = Driver.get();
+        this.actions = new Actions(driver);
         this.loc = Locators.forPage(pageName);
     }
 
@@ -1304,7 +716,7 @@ public abstract class BasePage {
     /** Generic page-load check that fails with a clear message. */
     @SuppressWarnings("unchecked")
     protected <T extends BasePage> T waitUntilLoaded() {
-        wait.until(d -> isLoaded(), getClass().getSimpleName() + " did not load");
+        actions.waitUntil(d -> isLoaded(), getClass().getSimpleName() + " did not load");
         return (T) this;
     }
 
@@ -1314,7 +726,7 @@ public abstract class BasePage {
 
 ### 12.3 `LoginPage.java`
 ```java
-package com.parag.parabank.pages;
+package PageObjects;
 
 public class LoginPage extends BasePage {
 
@@ -1328,7 +740,7 @@ public class LoginPage extends BasePage {
 
     @Step("Open ParaBank")
     public LoginPage open() {
-        driver.get(ConfigManager.get("baseUrl") + "/index.htm");
+        driver.get(Config.get("baseUrl") + "/index.htm");
         return waitUntilLoaded();
     }
 
@@ -1358,7 +770,7 @@ public class LoginPage extends BasePage {
 
 ### 12.4 `TransferFundsPage.java`
 ```java
-package com.parag.parabank.pages;
+package PageObjects;
 
 public class TransferFundsPage extends BasePage {
 
@@ -1388,7 +800,7 @@ public class TransferFundsPage extends BasePage {
 
 ### 12.5 Component example: `AccountsTableComponent.java`
 ```java
-package com.parag.parabank.components;
+package PageObjects;   // shared widgets live next to the pages
 
 /** The accounts overview table, written once and used by every page that lists accounts. */
 public class AccountsTableComponent extends BaseComponent {
@@ -1398,7 +810,7 @@ public class AccountsTableComponent extends BaseComponent {
     /** Balance shown in the UI for one account, as BigDecimal (never double). */
     public BigDecimal balanceOf(long accountId) {
         String text = actions.text(loc.by("balance.byAccountId", accountId));   // dynamic locator {0}
-        return MoneyUtils.parse(text);
+        return Money.parse(text);
     }
 
     public List<Long> accountIds() { /* reads the account-number links in the table */ }
@@ -1412,18 +824,16 @@ public class AccountsTableComponent extends BaseComponent {
 Cucumber is the **primary way tests are written**. Pages, API clients, locators, messages, data, drivers and Allure all sit underneath it.
 
 ```
-src/test/java/com/parag/parabank/bdd/
-├── runners/CucumberTestRunner.java
-├── hooks/CucumberHooks.java
-└── steps/common | ui | api
-src/test/resources/features/ui | api | hybrid/*.feature
+Features/*.feature                       # scenarios, grouped by tags (@ui, @api), not by folders
+src/test/java/StepDefinitions/           # LoginSteps, TransferSteps, TransferApiSteps …
+src/test/java/TestRunner/                # CucumberTestRunner.java, Hooks.java
 ```
 
 ### 13.1 Runner (parallel scenarios)
 ```java
 @CucumberOptions(
-    features = "src/test/resources/features",
-    glue = {"com.parag.parabank.bdd.steps", "com.parag.parabank.bdd.hooks"},
+    features = "Features",
+    glue = {"StepDefinitions", "TestRunner"},
     plugin = {"pretty",
               "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",   // Allure for BDD
               "rerun:target/rerun.txt"},                           // failed scenarios, for a re-run
@@ -1438,16 +848,16 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
 }
 ```
 
-**`src/test/resources/suites/testng.xml`**
+**`src/test/resources/testng.xml`**
 ```xml
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <!-- data-provider-thread-count = how many scenarios run at once. Override with -DdpThreads=N. -->
 <suite name="ParaBank" data-provider-thread-count="4">
   <test name="Framework checks" preserve-order="true">
-    <classes><class name="com.parag.parabank.framework.LocatorIntegrityTest"/></classes>
+    <classes><class name="Utils.LocatorIntegrityTest"/></classes>
   </test>
   <test name="Scenarios">
-    <classes><class name="com.parag.parabank.bdd.runners.CucumberTestRunner"/></classes>
+    <classes><class name="TestRunner.CucumberTestRunner"/></classes>
   </test>
 </suite>
 ```
@@ -1455,75 +865,50 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
 
 ### 13.2 Hooks: browser only for `@ui`, cleanup for everything
 ```java
-public class CucumberHooks {
+public class Hooks {
 
     /** API-only scenarios never open a browser, so they stay fast. */
     @Before(value = "@ui", order = 0)
     public void startBrowser(Scenario scenario) {
         ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_"));
-        String browser = ConfigManager.get("browser");
-        ThreadContext.put("browser", browser);
-        DriverManager.setDriver(DriverFactory.create(BrowserType.from(browser)));
+        ThreadContext.put("browser", Config.get(Config.BROWSER));
+        Driver.start();
     }
 
     /** Attach evidence BEFORE quitting: once the driver is gone, no screenshot can be taken. */
     @After(value = "@ui", order = 0)
     public void stopBrowser(Scenario scenario) {
         try {
-            if (scenario.isFailed() && DriverManager.hasDriver()) {
-                byte[] png = ((TakesScreenshot) DriverManager.getDriver()).getScreenshotAs(OutputType.BYTES);
+            if (scenario.isFailed() && Driver.isStarted()) {
+                byte[] png = ((TakesScreenshot) Driver.get()).getScreenshotAs(OutputType.BYTES);
                 scenario.attach(png, "image/png", "Failure screenshot");
-                if (ConfigManager.getBoolean("attach.page.source.on.failure")) AllureAttachments.pageSource();
+                if (Config.getBoolean("attach.page.source.on.failure")) AllureAttachments.pageSource();
                 AllureAttachments.browserConsoleLogs();
             }
         } finally {
-            DriverManager.quit();                  // always, even if attaching failed
+            Driver.quit();                  // always, even if attaching failed
         }
     }
 
     /** Runs for every scenario, UI or API: no data leaks into the next scenario on this thread. */
     @After(order = 1)
     public void clearContext() {
-        TestContext.clear();
+        ScenarioContext.clear();
         ThreadContext.clearAll();
     }
 }
 ```
 
-### 13.3 `TestContext.java` and `ContextKey.java`
+### 13.3 `Utils/ScenarioContext.java`
+
+`Utils/ScenarioContext.java` passes data between the steps of ONE scenario (e.g. an account id created in a Given step and checked in a Then step). It is a per-thread map, cleared by the `@After` hook. Keys are constants on the class; add a new constant instead of typing free text.
+
 ```java
-package com.parag.framework.context;
-
-/**
- * Per-thread key/value store for passing data between steps of ONE scenario,
- * e.g. the account IDs created through the API in a Given step and checked in a Then step.
- * Use ContextKey constants, not free-text strings.
- */
-public final class TestContext {
-    private static final ThreadLocal<Map<String, Object>> CTX = ThreadLocal.withInitial(HashMap::new);
-    private TestContext() { }
-
-    public static void put(String key, Object value) { CTX.get().put(key, value); }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T get(String key) {
-        Object v = CTX.get().get(key);
-        if (v == null) throw new IllegalStateException("TestContext has no value for '" + key + "'");
-        return (T) v;
-    }
-
-    public static void clear() { CTX.remove(); }
-}
-
-public final class ContextKey {
-    public static final String CUSTOMER            = "customer";
-    public static final String CUSTOMER_ID         = "customer.id";
-    public static final String CHECKING_ACCOUNT_ID = "account.checking.id";
-    public static final String SAVINGS_ACCOUNT_ID  = "account.savings.id";
-    public static final String LAST_RESPONSE       = "api.last.response";
-    private ContextKey() { }
-}
+ScenarioContext.put(ScenarioContext.CHECKING_ACCOUNT_ID, id);
+long id = ScenarioContext.get(ScenarioContext.CHECKING_ACCOUNT_ID);   // fails naming the key if missing
+ScenarioContext.clear();                                              // @After hook
 ```
+Keys today: `CUSTOMER`, `CUSTOMER_ID`, `CHECKING_ACCOUNT_ID`, `SAVINGS_ACCOUNT_ID`, `LAST_RESPONSE`.
 
 ### 13.4 Steps stay thin: they call pages or API clients, then assert
 ```java
@@ -1534,8 +919,8 @@ public class TransferUiSteps {
     public void transferInBrowser(BigDecimal amount) {
         transferPage = new LeftMenuComponent().openTransferFunds()
                 .transfer(amount,
-                          TestContext.get(ContextKey.CHECKING_ACCOUNT_ID),
-                          TestContext.get(ContextKey.SAVINGS_ACCOUNT_ID));
+                          ScenarioContext.get(ScenarioContext.CHECKING_ACCOUNT_ID),
+                          ScenarioContext.get(ScenarioContext.SAVINGS_ACCOUNT_ID));
     }
 
     @Then("the confirmation page shows the transfer is complete")
@@ -1549,7 +934,7 @@ public class TransferUiSteps {
 
 ### 13.5 Feature examples
 
-**`features/ui/login.feature`**
+**`Features/login.feature`**
 ```gherkin
 @ui
 Feature: Customer login
@@ -1571,7 +956,7 @@ Feature: Customer login
       |               |          | login.error.empty   |
 ```
 
-**`features/ui/bill-pay.feature`**
+**`Features/bill-pay.feature`**
 ```gherkin
 @ui
 Feature: Bill pay
@@ -1633,7 +1018,7 @@ API testing is a **first-class layer**, not a helper. It serves three purposes:
 
 ### 14.2 `RequestSpecFactory.java`
 ```java
-package com.parag.framework.api;
+package ApiClients;
 
 /** One shared request spec. ParaBank returns XML by default, so JSON is requested explicitly. */
 public final class RequestSpecFactory {
@@ -1641,8 +1026,8 @@ public final class RequestSpecFactory {
 
     public static RequestSpecification base() {
         return new RequestSpecBuilder()
-                .setBaseUri(ConfigManager.get("baseUrl"))
-                .setBasePath(ConfigManager.get("api.base.path"))
+                .setBaseUri(Config.get("baseUrl"))
+                .setBasePath(Config.get("api.base.path"))
                 .setAccept(ContentType.JSON)
                 .setConfig(RestAssuredConfig.config().httpClient(HttpClientConfig.httpClientConfig()
                         .setParam("http.connection.timeout", ApiConfig.timeoutMillis())
@@ -1656,7 +1041,7 @@ public final class RequestSpecFactory {
 
 ### 14.3 Client example: `TransferApi.java`
 ```java
-package com.parag.parabank.api.clients;
+package ApiClients;
 
 /** One method per endpoint. Returns the raw Response so callers can assert status and body. */
 public final class TransferApi {
@@ -1685,7 +1070,7 @@ ParaBank endpoints used by this suite (verify against the WADL):
 
 ### 14.4 Test data through the API: `TestDataSetup.java`
 ```java
-package com.parag.parabank.api.data;
+package ApiClients;
 
 /**
  * Builds the starting state for a scenario in seconds instead of minutes of clicking.
@@ -1701,9 +1086,9 @@ public final class TestDataSetup {
         BankCustomer customer = customerForThisThread();
         long customerId = new AuthApi().login(customer).id();
         long checkingId = new AccountApi().createChecking(customerId, /* funded to */ balance);
-        TestContext.put(ContextKey.CUSTOMER, customer);
-        TestContext.put(ContextKey.CUSTOMER_ID, customerId);
-        TestContext.put(ContextKey.CHECKING_ACCOUNT_ID, checkingId);
+        ScenarioContext.put(ScenarioContext.CUSTOMER, customer);
+        ScenarioContext.put(ScenarioContext.CUSTOMER_ID, customerId);
+        ScenarioContext.put(ScenarioContext.CHECKING_ACCOUNT_ID, checkingId);
     }
 
     public void addSavingsAccount() { /* createAccount type 1, store SAVINGS_ACCOUNT_ID */ }
@@ -1714,7 +1099,7 @@ public final class TestDataSetup {
 
 ### 14.5 `MaskingLogFilter.java`
 ```java
-package com.parag.framework.api;
+package ApiClients;
 
 /** Logs every API call, with the password path segment and password parameters masked. */
 public class MaskingLogFilter implements Filter {
@@ -1773,7 +1158,7 @@ Scenario: Transfer in the browser updates both balances
 response.then()
         .statusCode(200)
         .body(matchesJsonSchemaInClasspath("schemas/account.json"))
-        .time(lessThan((long) ConfigManager.getInt("api.max.response.millis")));
+        .time(lessThan((long) Config.getInt("api.max.response.millis")));
 Account account = response.as(Account.class);
 assertThat(account.balance()).as("Checking balance after transfer").isEqualByComparingTo("300.00");
 ```
@@ -1786,27 +1171,16 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
 
 ### 15.1 How scenarios run in parallel
 - `CucumberTestRunner.scenarios()` is a `@DataProvider(parallel = true)`, so **each scenario is one parallel invocation**.
-- Pool size = `data-provider-thread-count` in `testng.xml`, overridable with `-DdpThreads=N` (`SuiteTuningListener`).
-- Each scenario gets its own browser (`@ui` hook), its own `TestContext` and new step-class instances (PicoContainer).
+- Pool size = `data-provider-thread-count` in `testng.xml`, overridable with `-DdpThreads=N` (`SuiteListener`).
+- Each scenario gets its own browser (`@ui` hook), its own `ScenarioContext` and new step-class instances (PicoContainer).
 
-```java
-/** Overrides suite XML parallelism from the command line: mvn test -DdpThreads=6 */
-public class SuiteTuningListener implements IAlterSuiteListener {
-    @Override
-    public void alter(List<XmlSuite> suites) {
-        for (XmlSuite suite : suites) {
-            Optional.ofNullable(System.getProperty("dpThreads")).map(Integer::parseInt)
-                    .ifPresent(suite::setDataProviderThreadCount);
-        }
-    }
-}
-```
+`Utils/SuiteListener.java` (registered in `META-INF/services`) applies `-DdpThreads=N` to every suite before it starts, and rejects values that are not positive whole numbers.
 
 ### 15.2 Thread-safety checklist (mandatory in code review)
 - [ ] No `static` WebDriver, WebElement, page or test-data fields (`static final` constants are fine).
-- [ ] The driver is only obtained through `DriverManager.getDriver()`.
+- [ ] The driver is only obtained through `Driver.get()`.
 - [ ] Page objects are created **inside** steps, never shared between scenarios.
-- [ ] Shared runtime data goes in `TestContext` (ThreadLocal), never in static maps.
+- [ ] Shared runtime data goes in `ScenarioContext` (ThreadLocal), never in static maps.
 - [ ] Every scenario uses **its own accounts**; no two scenarios change the same account.
 - [ ] Registered customers are cached **per thread** (`ThreadLocal`), never shared across threads.
 
@@ -1822,10 +1196,10 @@ public class SuiteTuningListener implements IAlterSuiteListener {
 - The browser comes from `-Dbrowser=chrome|firefox|edge` (default `chrome`).
 - **CI runs a browser matrix**: one job per browser (§19), so each browser has its own report and failures are easy to separate.
 - **Coding rules:**
-  - Browser-specific flags live only in `BrowserOptionsFactory`, never in pages.
+  - Browser-specific flags live only in `Driver`, never in pages.
   - Avoid CDP-only features (network interception) in scenarios that must run on Firefox.
   - Prefer `id`/`name`/CSS locators; use XPath only when the DOM gives nothing better.
-- **Selenium Grid (optional, later):** `execution.mode=grid` with `grid.url` already works through `DriverFactory.createRemote`. A `docker-compose` Grid file can be added when the suite needs more parallel browsers than one machine can run.
+- **Selenium Grid (optional, later):** `execution.mode=grid` with `grid.url` already works through `Driver.start()`. A `docker-compose` Grid file can be added when the suite needs more parallel browsers than one machine can run.
 
 ---
 
@@ -1842,26 +1216,26 @@ allure.results.directory=target/allure-results
 | Gherkin steps (AllureCucumber7Jvm plugin) | The scenario's steps, with pass/fail per step |
 | `@Step` on page methods | Nested business steps inside each Gherkin step |
 | `AllureRestAssured` filter | Request and response of every API call, attached to the step |
-| `CucumberHooks` on failure | Screenshot, page source, browser console log |
+| `Hooks` on failure | Screenshot, page source, browser console log |
 | Feature folders + tags | Behaviours tab grouped by feature; filter by `@smoke`, `@api`… |
 
-### 17.3 `AllureAttachments.java`
+### 17.3 `Utils/AllureAttachments.java` (phase 2)
 ```java
-package com.parag.framework.reporting;
+package Utils;
 
 /** Every attachment helper in one place. All methods are safe to call even if the driver is broken. */
 public final class AllureAttachments {
     private AllureAttachments() { }
 
     public static void pageSource() {
-        try { Allure.addAttachment("Page source", "text/html", DriverManager.getDriver().getPageSource(), "html"); }
+        try { Allure.addAttachment("Page source", "text/html", Driver.get().getPageSource(), "html"); }
         catch (Exception e) { LogManager.getLogger().warn("Page source failed: {}", e.getMessage()); }
     }
 
     /** Browser console errors (Chromium browsers only; skipped silently elsewhere). */
     public static void browserConsoleLogs() {
         try {
-            String logs = DriverManager.getDriver().manage().logs().get(LogType.BROWSER).getAll()
+            String logs = Driver.get().manage().logs().get(LogType.BROWSER).getAll()
                     .stream().map(Object::toString).collect(Collectors.joining("\n"));
             if (!logs.isBlank()) Allure.addAttachment("Browser console", "text/plain", logs);
         } catch (Exception ignored) { /* not supported by this browser */ }
@@ -1870,48 +1244,23 @@ public final class AllureAttachments {
 ```
 
 ### 17.4 Environment widget + failure categories
-```java
-/** Writes environment.properties (shown on the Allure overview) and copies categories.json before the run starts. */
-public class AllureEnvironmentListener implements ISuiteListener {
-    @Override
-    public void onStart(ISuite suite) {
-        Path results = Path.of(System.getProperty("allure.results.directory", "target/allure-results"));
-        try {
-            Files.createDirectories(results);
-            Properties env = new Properties();
-            env.setProperty("Environment", ConfigManager.env());
-            env.setProperty("Base URL", ConfigManager.get("baseUrl"));
-            env.setProperty("Browser", ConfigManager.get("browser"));
-            env.setProperty("Java", System.getProperty("java.version"));
-            env.setProperty("OS", System.getProperty("os.name"));
-            try (OutputStream out = Files.newOutputStream(results.resolve("environment.properties"))) { env.store(out, null); }
+`Utils/SuiteListener.java`, when the suite starts, writes `environment.properties` (env, base URL, browser, headless, Java, OS) into the Allure results folder and copies `allure-categories.json` there as `categories.json`. A reporting problem is logged as a warning and never fails the run.
 
-            try (InputStream in = getClass().getClassLoader().getResourceAsStream("allure/categories.json")) {
-                if (in != null) Files.copy(in, results.resolve("categories.json"), StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException e) {
-            LogManager.getLogger().warn("Could not write Allure environment: {}", e.getMessage());
-        }
-    }
-}
-```
-
-**`src/test/resources/allure/categories.json`**: groups failures by root cause on the Allure "Categories" tab
+**`src/test/resources/allure-categories.json`**: groups failures by root cause on the Allure "Categories" tab
 ```json
 [
   { "name": "Product defects (assertion failed)", "matchedStatuses": ["failed"], "messageRegex": ".*(expected|Expecting).*" },
-  { "name": "Locator / element issues",           "matchedStatuses": ["broken"], "traceRegex": ".*(NoSuchElementException|LocatorNotFoundException|StaleElementReferenceException).*" },
+  { "name": "Locator / element issues",           "matchedStatuses": ["broken"], "traceRegex": ".*(NoSuchElementException|StaleElementReferenceException|Missing locator key|Bad locator format|Unknown strategy|Locator file not found).*" },
   { "name": "Timeouts / environment slowness",    "matchedStatuses": ["broken"], "traceRegex": ".*TimeoutException.*" },
   { "name": "API / network",                      "matchedStatuses": ["broken"], "traceRegex": ".*(ConnectException|SocketTimeoutException|HttpHostConnectException).*" },
-  { "name": "Test data / config problems",        "matchedStatuses": ["broken"], "traceRegex": ".*(TestDataException|ConfigException).*" },
+  { "name": "Test data / config problems",        "matchedStatuses": ["broken"], "traceRegex": ".*FrameworkException.*" },
   { "name": "Skipped",                            "matchedStatuses": ["skipped"] }
 ]
 ```
 
-**`src/main/resources/META-INF/services/org.testng.ITestNGListener`** (auto-registered, no suite XML entries needed)
+**`src/test/resources/META-INF/services/org.testng.ITestNGListener`** (auto-registered, no suite XML entries needed)
 ```
-com.parag.framework.listeners.SuiteTuningListener
-com.parag.framework.listeners.AllureEnvironmentListener
+Utils.SuiteListener
 ```
 
 ### 17.5 Generating the report
@@ -1931,7 +1280,7 @@ mvn allure:report     # CI: writes static HTML to target/site/allure-maven-plugi
   Two outputs:
    1. Console               : what you see in the IDE and CI log
    2. target/logs/run.log   : the whole run, rolled at 20 MB (under target/, so never committed)
-  %X{scenario} and %X{browser} come from ThreadContext, set in CucumberHooks, so parallel lines stay readable.
+  %X{scenario} and %X{browser} come from ThreadContext, set in Hooks, so parallel lines stay readable.
 -->
 <Configuration status="WARN">
   <Properties>
@@ -2036,19 +1385,19 @@ jobs:
 |---|---|---|---|
 | 1 | Passwords or tokens committed to git | Security breach | `${SECRET}` placeholders, generated customer passwords, GitHub Secrets (§6.4, §10) |
 | 2 | Driver binaries (`chromedriver.exe`) in the repo; Windows-only paths | Breaks on browser updates and on Linux CI | Selenium Manager + classpath loading (§6.3, §7) |
-| 3 | Browser started inside a Gherkin step ("Given I launch the app") | Order-dependent failures; NPE in `@After` | Driver created in the `@ui` `@Before` hook (§13.2) |
-| 4 | `static WebDriver` | Parallel scenarios corrupt each other | `ThreadLocal` `DriverManager` (§7.4) |
+| 3 | Browser started inside a Gherkin step ("Given I launch the app") | Order-dependent failures; NPE in `@After` | `Driver.start()` in the `@ui` `@Before` hook (§13.2) |
+| 4 | `static WebDriver` | Parallel scenarios corrupt each other | `ThreadLocal` in `Driver` (§7) |
 | 5 | Mixed test engines / mismatched Cucumber versions | Classpath conflicts, wrong runner | TestNG only; one `${cucumber.version}` (§5) |
 | 6 | One giant locator file, or locators hard-coded in Java | Fragile, hard to maintain | One locator file per page, multi-strategy, fail fast, integrity test (§8) |
 | 7 | Expected messages hard-coded in steps | Many edits for one wording change | `messages_en.properties` (§9) |
-| 8 | Implicit waits and `Thread.sleep` | Slow and flaky | `WaitUtils` explicit waits only (§11.1) |
+| 8 | Implicit waits and `Thread.sleep` | Slow and flaky | Explicit waits only, in `Actions` (§11.1) |
 | 9 | Assertions inside page objects | Pages can't be reused for negative scenarios | Assertions only in steps, with AssertJ descriptions (§12.1) |
-| 10 | A "context" class with dozens of public fields | Grows forever, not thread-safe | `TestContext` ThreadLocal map + `ContextKey` (§13.3) |
+| 10 | A "context" class with dozens of public fields | Grows forever, not thread-safe | `ScenarioContext` ThreadLocal map + key constants (§13.3) |
 | 11 | Money compared as `double` | Rounding causes false failures | `BigDecimal` + `isEqualByComparingTo` (§11.4, §14.7) |
 | 12 | Test data built through the UI for every scenario | Slow, flaky suites | API-based setup (§14.4) |
 | 13 | Hardcoded tags in the runner | Manual edits for every run | `-Dcucumber.filter.tags` (§13.1, §22) |
 | 14 | Imperative Gherkin ("When I click…") | Unreadable, brittle scenarios | Declarative business steps (§13.6) |
-| 15 | Logs and reports committed | Repo bloat | Everything under `target/` (§18, Appendix A) |
+| 15 | Logs, reports or driver binaries committed | Repo bloat, stale drivers | Everything under `target/`; Selenium Manager for drivers (§4, §18, Appendix A) |
 | 16 | Expectations changed to match the app's behaviour | Real defects hidden | `@knownIssue` tag + documented finding (§13.6) |
 
 ---
@@ -2058,16 +1407,16 @@ jobs:
 **Naming**
 | Item | Convention | Example |
 |---|---|---|
-| Packages | lowercase, reverse domain | `com.parag.parabank.pages` |
+| Folders / packages | PascalCase, by role (§4) | `PageObjects`, `StepDefinitions`, `Utils` |
 | Page classes | `<Name>Page` | `TransferFundsPage` |
 | Components | `<Name>Component` | `AccountsTableComponent` |
 | API clients | `<Resource>Api` | `TransferApi` |
-| Step classes | `<Feature><Layer>Steps` | `TransferUiSteps`, `TransferApiSteps` |
+| Step classes | `<Feature>Steps` / `<Feature>ApiSteps` | `TransferSteps`, `TransferApiSteps` |
 | Feature files | kebab-case, one business capability | `transfer-funds.feature` |
 | Locator files | kebab-case = page name | `transfer-funds.properties` |
 | Locator keys | `<element>.<type>` | `amount.input`, `transfer.button`, `from.account.select` |
 | Message keys | `<module>.<context>.<meaning>` | `billpay.validation.payee.required` |
-| Constants | UPPER_SNAKE | `ContextKey.CHECKING_ACCOUNT_ID` |
+| Constants | UPPER_SNAKE | `ScenarioContext.CHECKING_ACCOUNT_ID` |
 
 **Rules**
 1. No `Thread.sleep`, implicit waits, `System.out` or `printStackTrace`.
@@ -2106,7 +1455,7 @@ docker run -d -p 8080:8080 parasoft/parabank
 mvn clean test -Plocal -Dbrowser=firefox -Dheadless=true -DdpThreads=4
 
 # One feature file
-mvn clean test -Dcucumber.features="src/test/resources/features/ui/login.feature"
+mvn clean test -Dcucumber.features="Features/login.feature"
 
 # Re-run only the scenarios that failed last time
 mvn test -Dcucumber.features="@target/rerun.txt"
@@ -2123,9 +1472,9 @@ mvn allure:serve
 
 | Phase | Duration (indicative) | Deliverables | Exit criteria |
 |---|---|---|---|
-| **0. Setup** | 1 day | Repo, `pom.xml`, `.gitignore`, README, folder skeleton | `mvn clean verify` green on Windows and Linux |
-| **1. Core** | 3–4 days | ConfigManager, DriverFactory/Manager, BrowserOptions, WaitUtils, ElementActions, Locators, Messages, data readers, exceptions | LocatorIntegrityTest passes |
-| **2. BDD + first UI feature** | 2–3 days | Runner, hooks, TestContext; register + login pages, `login.feature` | Login scenarios green, screenshot attached on a forced failure |
+| **0. Setup** | 1 day | Repo, `pom.xml`, `.gitignore`, README, folder layout (§4) | `mvn clean verify` green on Windows and Linux |
+| **1. Core** | 3–4 days | `Utils/`: Config, Driver, Locators, Messages, Actions, TestData, ScenarioContext, Money, FrameworkException, SuiteListener | LocatorIntegrityTest passes |
+| **2. BDD + first UI feature** | 2–3 days | Runner, hooks; register + login pages, `login.feature` | Login scenarios green, screenshot attached on a forced failure |
 | **3. API layer** | 2–3 days | RequestSpecFactory, MaskingLogFilter, clients, models, schemas, TestDataSetup | `@api` transfer scenarios green, no browser started |
 | **4. Banking features** | 1 week | Open account, transfer, bill pay, find transactions, loan: UI, API and hybrid scenarios | 15–20 scenarios green in parallel (4 threads) on Chrome and Firefox |
 | **5. Reporting and CI** | 2 days | Allure categories/environment, GitHub Actions with ParaBank service container, report on Pages | Green badge, public report link in README |
@@ -2160,17 +1509,8 @@ Thumbs.db
 *.secret.properties
 ```
 
-### Appendix B: Exception hierarchy
-```java
-/** All framework errors are unchecked, so method signatures stay clean (no "throws Exception" everywhere). */
-public class FrameworkException extends RuntimeException {
-    public FrameworkException(String msg) { super(msg); }
-    public FrameworkException(String msg, Throwable cause) { super(msg, cause); }
-}
-public class ConfigException          extends FrameworkException { /* missing or invalid config */ }
-public class LocatorNotFoundException extends FrameworkException { /* missing or invalid locator */ }
-public class TestDataException        extends FrameworkException { /* missing or invalid data/secret */ }
-```
+### Appendix B: Errors
+There is one framework error type, `Utils/FrameworkException` (unchecked, so no `throws Exception` everywhere). The message always says what is wrong and where: `Missing config key: browser (env=local)`, `Missing locator key: login.login.button`, `Secret/environment variable not set: PARABANK_PASSWORD`. Allure groups them by message text (`allure-categories.json`).
 
 ---
-*End of design document. Keep it next to the code (`/docs/FRAMEWORK_DESIGN.md`) and update it in the same pull request as any architectural change.*
+*End of design document. Keep it next to the code (`docs/FRAMEWORK_DESIGN.md`) and update it in the same pull request as any architectural change.*
