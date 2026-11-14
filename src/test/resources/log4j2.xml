@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two outputs:
+   1. Console               : what you see in the IDE and CI log
+   2. target/logs/run.log   : the whole run, rolled at 20 MB (under target/, so never committed)
+  %X{scenario} and %X{browser} come from ThreadContext, set in CucumberHooks, so parallel lines stay readable.
+-->
+<Configuration status="WARN">
+  <Properties>
+    <Property name="pattern">%d{HH:mm:ss.SSS} [%t] [%X{scenario}] [%X{browser}] %-5level %c{1} - %msg%n</Property>
+    <Property name="logDir">target/logs</Property>
+  </Properties>
+
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">
+      <PatternLayout pattern="${pattern}"/>
+    </Console>
+    <RollingFile name="RunFile" fileName="${logDir}/run.log" filePattern="${logDir}/run-%i.log.gz">
+      <PatternLayout pattern="${pattern}"/>
+      <Policies><SizeBasedTriggeringPolicy size="20 MB"/></Policies>
+      <DefaultRolloverStrategy max="5"/>
+    </RollingFile>
+  </Appenders>
+
+  <Loggers>
+    <!-- Keep noisy libraries quiet -->
+    <Logger name="org.openqa.selenium" level="warn"/>
+    <Logger name="io.netty" level="warn"/>
+    <Logger name="org.apache.http" level="warn"/>
+
+    <Root level="info">
+      <AppenderRef ref="Console"/>
+      <AppenderRef ref="RunFile"/>
+    </Root>
+  </Loggers>
+</Configuration>

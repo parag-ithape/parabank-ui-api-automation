@@ -1,0 +1,8 @@
+[
+  { "name": "Product defects (assertion failed)", "matchedStatuses": ["failed"], "messageRegex": ".*(expected|Expecting).*" },
+  { "name": "Locator / element issues",           "matchedStatuses": ["broken"], "traceRegex": ".*(NoSuchElementException|LocatorNotFoundException|StaleElementReferenceException).*" },
+  { "name": "Timeouts / environment slowness",    "matchedStatuses": ["broken"], "traceRegex": ".*TimeoutException.*" },
+  { "name": "API / network",                      "matchedStatuses": ["broken"], "traceRegex": ".*(ConnectException|SocketTimeoutException|HttpHostConnectException).*" },
+  { "name": "Test data / config problems",        "matchedStatuses": ["broken"], "traceRegex": ".*(TestDataException|ConfigException).*" },
+  { "name": "Skipped",                            "matchedStatuses": ["skipped"] }
+]
