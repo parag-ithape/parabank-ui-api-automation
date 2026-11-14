@@ -1106,12 +1106,15 @@ package com.parag.framework.actions;
  */
 public class WaitUtils {
 
+    private final WebDriver driver;
+    private final Duration timeout = Duration.ofSeconds(ConfigManager.getInt("timeout.explicit"));
+    private final Duration polling = Duration.ofMillis(ConfigManager.getInt("timeout.polling.millis"));
     private final WebDriverWait wait;
 
     public WaitUtils(WebDriver driver) {
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigManager.getInt("timeout.explicit")));
-        this.wait.pollingEvery(Duration.ofMillis(ConfigManager.getInt("timeout.polling.millis")))
-                 .ignoring(StaleElementReferenceException.class);
+        this.driver = driver;
+        this.wait = new WebDriverWait(driver, timeout, polling);
+        this.wait.ignoring(StaleElementReferenceException.class);
     }
 
     public WebElement visible(By by)      { return wait.until(ExpectedConditions.visibilityOfElementLocated(by)); }
@@ -1132,9 +1135,15 @@ public class WaitUtils {
         wait.until(d -> "complete".equals(((JavascriptExecutor) d).executeScript("return document.readyState")));
     }
 
-    /** Custom condition with a readable timeout message. */
+    /**
+     * Custom condition with a readable timeout message. Uses a FRESH wait: withMessage() mutates the wait
+     * it is called on, so on the shared wait the message would stick to every later timeout.
+     */
     public <T> T until(Function<WebDriver, T> condition, String description) {
-        return wait.withMessage(description).until(condition);
+        WebDriverWait w = new WebDriverWait(driver, timeout, polling);
+        w.ignoring(StaleElementReferenceException.class);
+        w.withMessage(description);
+        return w.until(condition);
     }
 }
 ```
@@ -1186,7 +1195,9 @@ public class ElementActions {
     }
 
     public String text(By by)                { return wait.visible(by).getText().trim(); }
-    public String attribute(By by, String a) { return wait.present(by).getAttribute(a); }
+    // getAttribute() is deprecated since Selenium 4.27: use the DOM attribute (markup) or DOM property (live value)
+    public String attribute(By by, String a) { return wait.present(by).getDomAttribute(a); }
+    public String value(By by)               { return wait.present(by).getDomProperty("value"); }
 
     /** Non-throwing visibility check: returns false instead of throwing when the element is absent. */
     public boolean isDisplayed(By by) {
