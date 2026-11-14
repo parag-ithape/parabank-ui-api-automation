@@ -12,6 +12,8 @@
   <properties>
     <!-- ===== Java / encoding ===== -->
     <maven.compiler.release>17</maven.compiler.release>
+    <!-- Keeps parameter names in the bytecode, so Allure @Step titles can use {customer.username} -->
+    <maven.compiler.parameters>true</maven.compiler.parameters>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <!-- ===== Library versions (pin them, upgrade deliberately) ===== -->

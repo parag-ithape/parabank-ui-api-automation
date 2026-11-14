@@ -1,0 +1,11 @@
+[
+  {
+    "alias": "standard",
+    "street": "221 Test Street",
+    "city": "Pune",
+    "state": "MH",
+    "zipCode": "411001",
+    "phone": "9000000000",
+    "ssn": "123-45-6789"
+  }
+]
