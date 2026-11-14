@@ -15,6 +15,7 @@ import io.cucumber.plugin.event.TestStepStarted;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -106,6 +107,8 @@ public class StepLogger implements ConcurrentEventListener {
         for (String failure : failures) {
             LOG.error("          FAILED: {}", failure);
         }
+        LOG.info("REPORTS   Cucumber: {}", Path.of("target", "cucumber-report.html").toAbsolutePath());
+        LOG.info("          Allure:   run  mvn allure:serve");
         LOG.info(LINE);
     }
 

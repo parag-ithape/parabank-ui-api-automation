@@ -68,6 +68,13 @@ Scenarios run one after another in a single visible Chrome window, and the conso
 
 The target environment is the public ParaBank site by default (`env-public.properties`). For a local Docker instance run `docker run -d -p 8080:8080 parasoft/parabank`, then add `-Plocal` to the mvn command.
 
+## Reports
+
+After a run, the console summary shows where the reports are:
+
+- **Cucumber report:** double-click `target/cucumber-report.html`. Every feature, scenario and step, with screenshots of failures.
+- **Allure report:** run `mvn allure:serve`. It opens in your browser with charts, failure categories and full details per step (Ctrl+C to stop).
+
 ## Related projects
 
 - [Performance tests on ParaBank (JMeter)](https://github.com/parag-ithape/performance-test-jmeter)

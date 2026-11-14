@@ -846,6 +846,7 @@ src/test/java/runner/                    # CucumberTestRunner.java, Hooks.java
     features = "src/test/resources/features",
     glue = {"stepdefinitions", "runner"},
     plugin = {"runner.StepLogger",                                 // readable run log (section 18)
+              "html:target/cucumber-report.html",                  // one-file report, opens by double-click
               "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",   // Allure for BDD
               "rerun:target/rerun.txt"},                           // failed scenarios, for a re-run
     monochrome = true
@@ -1226,6 +1227,7 @@ allure.results.directory=target/allure-results
 | Source | Shows up as |
 |---|---|
 | Gherkin steps (AllureCucumber7Jvm plugin) | The scenario's steps, with pass/fail per step |
+| Cucumber `html` plugin | The same run as one file, `target/cucumber-report.html` (§17.5) |
 | `@Step` on page methods | Nested business steps inside each Gherkin step |
 | `AllureRestAssured` filter | Request and response of every API call, attached to the step |
 | `Hooks` on failure | Screenshot, page source, browser console log |
@@ -1275,11 +1277,19 @@ public final class AllureAttachments {
 utils.SuiteListener
 ```
 
-### 17.5 Generating the report
+### 17.5 Generating the reports
+Every run produces two reports; the run summary in the console prints where they are.
+
+| Report | How to open | Best for |
+|---|---|---|
+| **Cucumber HTML** `target/cucumber-report.html` | Double-click the file (one self-contained file, no server) | Quick look, attaching to an email or ticket: features, scenarios, steps in green/red, failure screenshots embedded |
+| **Allure** | `mvn allure:serve` (builds it and opens it in the browser; Ctrl+C to stop) | Analysis: trends, categories of failures, environment, timings, page source and API calls per step |
+
 ```bash
-mvn allure:serve      # local: builds the report and opens it in a browser
+mvn allure:serve      # local: builds the Allure report and opens it in a browser
 mvn allure:report     # CI: writes static HTML to target/site/allure-maven-plugin
 ```
+> The static Allure HTML can't be opened by double-clicking `index.html` (browsers block it as a file); use `allure:serve`, or publish it to GitHub Pages (§19).
 
 ---
 

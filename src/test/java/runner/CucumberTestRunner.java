@@ -13,6 +13,7 @@ import org.testng.annotations.DataProvider;
         features = "src/test/resources/features",
         glue = {"stepdefinitions", "runner"},
         plugin = {"runner.StepLogger",                                 // readable run log (scenarios, steps, summary)
+                  "html:target/cucumber-report.html",                  // one-file report, opens by double-click
                   "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",   // Allure report for BDD
                   "rerun:target/rerun.txt"},                           // failed scenarios, for a re-run
         monochrome = true
