@@ -596,7 +596,7 @@ Messages.get("register.success.title", username)   // fills {0}
 |---|---|---|---|
 | Customer templates | JSON | `testdata/customers.json` | address, phone, SSN pattern |
 | Bill-pay payees | JSON | `testdata/payees.json` | name, address, account number |
-| Unique values (username, names) | Generated | `TestData` | `TestData.username()` → `bdd_1731..._7_3` |
+| Unique values (username, names) | Generated | `TestData` | `TestData.username()` → `bdd_mhz3k2a1_0y03` (max 20 chars) |
 | Starting state (accounts, balances) | API | `api/TestDataSetup` | customer with checking 500.00 + empty savings |
 | Secrets (if any) | Env vars | `${VAR}` placeholders | `${PARABANK_PASSWORD}` |
 
@@ -647,7 +647,9 @@ Payee payee = TestData.read("testdata/payee.json", Payee.class);
 String text = TestData.resolveSecrets("password=${PARABANK_PASSWORD}");
 
 // 3. Unique, parallel-safe generated values
-TestData.username();    // "bdd_" + millis + thread id + JVM-wide counter: unique even in the same millisecond
+TestData.username();    // "bdd_" + millis + thread id + counter, base 36: unique even in the same millisecond.
+                        // At most 20 characters: ParaBank rejects longer usernames with a misleading
+                        // "This username already exists" (verified 2026-11-14).
 TestData.password();    // "Pw!" + 12 chars with upper, lower and digit (Datafaker text rule)
 TestData.firstName();  TestData.lastName();
 ```

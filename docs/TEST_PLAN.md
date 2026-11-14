@@ -93,7 +93,7 @@ Loan decisions depend on the bank's configured loan processor (available funds, 
 
 Every scenario owns its data, so scenarios run in any order and in parallel without colliding on the shared public site.
 
-- **Customers:** generated with unique usernames (`bdd_<timestamp>_<thread>`) and generated passwords. One customer is registered through the UI per thread and reused; ParaBank has no registration API.
+- **Customers:** generated with unique usernames (`bdd_<timestamp>_<thread><counter>`, at most 20 characters, the longest ParaBank accepts) and generated passwords. One customer is registered through the UI per thread and reused; ParaBank has no registration API.
 - **Accounts and balances:** created through the API at the start of each scenario (open account, transfer to set balances), then stored in the scenario context.
 - **Payees and addresses:** from `payees.json` and `customers.json`; no real personal data.
 - **Loan cases:** LON-01 uses a down payment well inside available funds; LON-02 uses a down payment larger than the funding account balance, so the outcome doesn't depend on edge thresholds.

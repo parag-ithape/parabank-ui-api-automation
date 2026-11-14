@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  *
  * <pre>
  *   TestData.readList("testdata/customers.json", CustomerTemplate.class)
- *   TestData.username()      // bdd_1731..._7_3, unique even in parallel
+ *   TestData.username()      // bdd_mhz3k2a1_0y03: unique even in parallel, at most 20 characters
  *   TestData.password()
  * </pre>
  * JSON may contain ${VAR} placeholders; they are replaced from -DVAR or the VAR environment variable,
@@ -32,6 +32,8 @@ public final class TestData {
     private static final Pattern SECRET = Pattern.compile("\\$\\{([A-Z0-9_]+)}");
     private static final Faker FAKER = new Faker();
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
+    /** Longest username ParaBank accepts (verified on the live site 2026-11-14). */
+    private static final int MAX_USERNAME_LENGTH = 20;
     /** 12 letters/digits with at least one upper case, one lower case and one digit; "Pw!" prefix adds a symbol. */
     private static final Text.TextRuleConfig PASSWORD_RULE = Text.TextSymbolsBuilder.builder()
             .len(12)
@@ -79,9 +81,26 @@ public final class TestData {
 
     // ============================ Generated values ============================
 
-    /** Time + thread id + counter: unique even when threads generate in the same millisecond. */
+    /**
+     * Unique username of at most 20 characters, e.g. "bdd_mhz3k2a1_0y03".
+     * Time, thread id and a counter (all base 36, fixed width) keep it unique even when threads generate
+     * in the same millisecond. ParaBank rejects usernames longer than 20 characters, misleadingly saying
+     * "This username already exists".
+     */
     public static String username() {
-        return "bdd_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId() + "_" + SEQUENCE.incrementAndGet();
+        String name = "bdd_" + Long.toString(System.currentTimeMillis(), 36)
+                + "_" + base36(Thread.currentThread().getId(), 2) + base36(SEQUENCE.incrementAndGet(), 2);
+        if (name.length() > MAX_USERNAME_LENGTH) {
+            throw new FrameworkException("Generated username is longer than " + MAX_USERNAME_LENGTH + ": " + name);
+        }
+        return name;
+    }
+
+    /** Last {@code width} base-36 digits of the value, zero-padded. */
+    private static String base36(long value, int width) {
+        long mod = (long) Math.pow(36, width);
+        String digits = Long.toString(Math.floorMod(value, mod), 36);
+        return "0".repeat(width - digits.length()) + digits;
     }
 
     public static String password() {
