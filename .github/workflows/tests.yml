@@ -1,0 +1,105 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "30 20 * * *"            # nightly, 02:00 IST
+  workflow_dispatch:                 # "Run workflow" button, with a choice of scenarios
+    inputs:
+      tags:
+        description: Cucumber tag expression (e.g. @smoke, @LOG-01, @knownIssue)
+        default: "not @knownIssue and not @wip"
+
+# A newer push to the same branch cancels the run that is still going
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false               # a Firefox failure doesn't stop the Chrome run, and vice versa
+      matrix:
+        browser: [chrome, firefox]
+
+    services:
+      parabank:                      # a private ParaBank for every run: no shared data, no public-site outages
+        image: parasoft/parabank:latest
+        ports: ["8080:8080"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Wait for ParaBank to start
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/parabank/index.htm > /dev/null; then
+              echo "ParaBank is up"; exit 0
+            fi
+            sleep 5
+          done
+          echo "ParaBank did not start within 5 minutes"; exit 1
+
+      - name: Run tests
+        run: >
+          mvn -B clean test -Plocal
+          -Dbrowser=${{ matrix.browser }} -Dheadless=true -DdpThreads=2
+          "-Dcucumber.filter.tags=${{ github.event.inputs.tags || 'not @knownIssue and not @wip' }}"
+
+      - name: Build Allure report
+        if: always()
+        run: mvn -B allure:report
+
+      - name: Collect reports
+        if: always()
+        run: |
+          mkdir -p site
+          cp -r target/allure-report/. site/ 2>/dev/null || true
+          cp target/cucumber-report.html site/ 2>/dev/null || true
+
+      - name: Keep reports and log as a downloadable artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-${{ matrix.browser }}
+          path: |
+            site
+            target/logs/run.log
+
+      - name: Prepare the Chrome report for GitHub Pages
+        if: always() && matrix.browser == 'chrome' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  publish-report:
+    name: Publish report to GitHub Pages
+    needs: test
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Needs Settings → Pages → Source: "GitHub Actions". Until that is switched on, this job fails
+    # without turning the whole workflow (and the README badge) red.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

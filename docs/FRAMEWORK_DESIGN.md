@@ -1335,57 +1335,20 @@ Raw selectors still appear where they help debugging: in timeout and "element no
 ## 19. CI/CD (GitHub Actions)
 
 ### 19.1 `.github/workflows/tests.yml`
-```yaml
-name: ParaBank Tests
-on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule: [{ cron: "30 20 * * *" }]           # nightly regression
-  workflow_dispatch:
-    inputs:
-      tags: { description: "Cucumber tag expression", default: "not @wip and not @knownIssue" }
+The workflow file is the source of truth; in short:
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chrome, firefox]               # one job per browser
-    services:
-      parabank:                                  # a private bank for every run: no shared data, no outages
-        image: parasoft/parabank
-        ports: ["8080:8080"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "17", cache: maven }
+| Part | What it does |
+|---|---|
+| Triggers | push to `main`, every pull request, nightly at 20:30 UTC, and **Run workflow** by hand with a tag expression |
+| `concurrency` | a newer push to the same branch cancels the run still going |
+| Service container | `parasoft/parabank:latest` on port 8080: a private bank per run, so data never mixes with other users of the public demo |
+| Wait step | polls `/parabank/index.htm` for up to 5 minutes before testing |
+| Matrix | `chrome`, `firefox` (`fail-fast: false`), each its own job and report |
+| Test command | `mvn -B clean test -Plocal -Dbrowser=<matrix> -Dheadless=true -DdpThreads=2` with the default filter `not @knownIssue and not @wip` (or the tags given by hand) |
+| Reports | `mvn allure:report` (single file) + `cucumber-report.html` + `run.log`, uploaded as artifact `reports-<browser>` even when tests fail (`if: always()`) |
+| GitHub Pages | the Chrome report from `main` is published by the `publish-report` job (`actions/deploy-pages`). Requires Settings → Pages → Source: **GitHub Actions**; the job has `continue-on-error: true` so the badge isn't red before Pages is switched on |
 
-      - name: Wait for ParaBank
-        run: |
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8080/parabank/index.htm && exit 0; sleep 5
-          done; exit 1
-
-      - name: Run tests
-        run: >
-          mvn -B clean test -Plocal
-          -Dbrowser=${{ matrix.browser }} -Dheadless=true -DdpThreads=4
-          -Dcucumber.filter.tags="${{ github.event.inputs.tags || (github.event_name == 'schedule' && 'not @wip and not @knownIssue' || '@smoke') }}"
-
-      - name: Build Allure report
-        if: always()
-        run: mvn -B allure:report                # target/allure-report/index.html
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: allure-report-${{ matrix.browser }}
-          path: target/allure-report
-  # A follow-up job publishes the Chrome report to GitHub Pages (actions/upload-pages-artifact + actions/deploy-pages).
-  # That Pages URL is the public report link in the README (showcase item S7, §23).
-```
+Action versions are pinned to the current major (checkout v7, setup-java v6, upload-artifact v7, upload-pages-artifact v5, deploy-pages v5).
 
 ### 19.2 Quality gates
 - **Smoke must be 100% green** on every push and pull request; regression runs nightly.
@@ -1497,7 +1460,7 @@ mvn allure:report                                  # Allure report → target/al
 | **2. BDD + first UI feature** | 2–3 days | Runner, hooks; register + login pages, `login.feature` tagged with `@LOG-xx` IDs | Login scenarios green, screenshot attached on a forced failure |
 | **3. API layer** | 2–3 days | RequestSpecFactory, MaskingLogFilter, clients, models, schemas, TestDataSetup | `@api` transfer scenarios green, no browser started |
 | **4. Banking features** | 1 week | Open account, transfer, bill pay, find transactions, loan: UI, API and hybrid scenarios | 15–20 scenarios green in parallel (4 threads) on Chrome and Firefox |
-| **5. Reporting and CI** | 2 days | AllureAttachments, GitHub Actions with ParaBank service container, Allure report published to GitHub Pages | Green CI badge, public report link and an Allure screenshot in README |
+| **5. Reporting and CI** (CI workflow pulled forward and built after phase 2, at the owner's request) | 2 days | AllureAttachments, GitHub Actions with ParaBank service container, Allure report published to GitHub Pages | Green CI badge, public report link and an Allure screenshot in README |
 | **6. Hardening** | ongoing | Known-issue findings documented, dependency upgrades, optional Selenium Grid | Pass rate above 95% without re-runs |
 
 

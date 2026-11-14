@@ -1,5 +1,7 @@
 # ParaBank UI + API Test Automation
 
+[![Tests](https://github.com/parag-ithape/parabank-ui-api-automation/actions/workflows/tests.yml/badge.svg)](https://github.com/parag-ithape/parabank-ui-api-automation/actions/workflows/tests.yml) · [Latest test report](https://parag-ithape.github.io/parabank-ui-api-automation/)
+
 Test automation for the [ParaBank](https://parabank.parasoft.com/parabank) demo banking app, covering the **UI with Selenium + Cucumber BDD** and the **API with REST Assured** in a single Java framework.
 
 > 🚧 **In progress.** Scenarios are being added feature by feature. See the coverage table below.
@@ -76,6 +78,15 @@ Defects found in ParaBank while automating. Scenarios that expose them are tagge
 | --- | --- | --- | --- | --- |
 | 1 | Open the accounts overview after logging out | Login page | HTTP 500 page: "Error! An internal error has occurred and has been logged." (no account data is shown) | LOG-04 `@knownIssue` |
 | 2 | Register with a username longer than 20 characters | A clear "username too long" message | "This username already exists." (misleading) | Found while building test data; generated usernames stay at 20 characters or fewer |
+
+## Continuous integration
+
+GitHub Actions runs the suite on every push and pull request, and nightly ([workflow](.github/workflows/tests.yml)):
+
+- A private ParaBank starts in Docker for each run, so CI never depends on the shared public site.
+- Chrome and Firefox run side by side, headless, two scenarios at a time.
+- The Allure and Cucumber reports are kept as downloadable artifacts on every run; the Chrome report from `main` is published at **[https://parag-ithape.github.io/parabank-ui-api-automation/](https://parag-ithape.github.io/parabank-ui-api-automation/)** (Cucumber report: `cucumber-report.html` on the same site).
+- **Run workflow** on the Actions tab lets you choose which scenarios to run, e.g. `@smoke` or `@knownIssue`.
 
 ## Reports
 
