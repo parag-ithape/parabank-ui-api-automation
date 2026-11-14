@@ -61,21 +61,21 @@
 
 ## 2. Technology Stack
 
-> ⚠️ The versions below are a known-good baseline. **Check Maven Central for the latest stable release at project start**, then pin versions in `pom.xml` properties.
+> ⚠️ Versions were checked on Maven Central at project start (Nov 2026) and are pinned in `pom.xml`. They are the latest stable releases **within the major line the design was written for**; newer majors (Cucumber 8, Allure 3, REST Assured 7, AssertJ 4, Log4j 3) are a deliberate upgrade, not a drop-in. **Exception: maven-surefire-plugin stays on 3.5.x**, because 3.6.0+ no longer supports TestNG suite XML files.
 
-| Concern | Tool | Version (baseline) | Why |
+| Concern | Tool | Version (pinned) | Why |
 |---|---|---|---|
 | Language | Java (LTS) | 17 or 21 | Records, `switch` expressions, `var`, long-term support |
 | Build | Maven | 3.9.x | Standard, CI-friendly, profiles |
-| UI automation | Selenium WebDriver | 4.27.x | W3C protocol, Selenium Manager (no driver binaries) |
-| BDD | Cucumber JVM + cucumber-testng + PicoContainer | 7.20.x | Gherkin scenarios, TestNG runner, dependency injection per scenario |
-| Test engine | TestNG | 7.10.x | Parallel scenarios through DataProvider, suite XML |
+| UI automation | Selenium WebDriver | 4.52.x | W3C protocol, Selenium Manager (no driver binaries) |
+| BDD | Cucumber JVM + cucumber-testng + PicoContainer | 7.34.x | Gherkin scenarios, TestNG runner, dependency injection per scenario |
+| Test engine | TestNG | 7.12.x | Parallel scenarios through DataProvider, suite XML |
 | API testing | REST Assured + json-schema-validator | 5.5.x | Fluent HTTP client, JSON schema contract checks |
-| Assertions | AssertJ | 3.26.x | Fluent, readable assertions with descriptions; soft assertions |
-| Reporting | Allure (allure-cucumber7-jvm, allure-rest-assured) | 2.29.x | Rich HTML report with Gherkin steps and API attachments |
-| Logging | Log4j2 | 2.24.x | Console and rolling run log |
-| JSON data | Jackson Databind | 2.18.x | JSON ↔ POJO mapping for test data and API models |
-| Fake data | Datafaker | 2.4.x | Unique, realistic customer data that stays safe in parallel |
+| Assertions | AssertJ | 3.27.x | Fluent, readable assertions with descriptions; soft assertions |
+| Reporting | Allure (allure-cucumber7-jvm, allure-rest-assured) | 2.35.x | Rich HTML report with Gherkin steps and API attachments |
+| Logging | Log4j2 | 2.26.x | Console and rolling run log |
+| JSON data | Jackson Databind | 2.23.x | JSON ↔ POJO mapping for test data and API models |
+| Fake data | Datafaker | 2.7.x | Unique, realistic customer data that stays safe in parallel |
 | CI | GitHub Actions | n/a | Free for public repos; ParaBank runs as a service container |
 
 ---
@@ -282,16 +282,16 @@ parabank-ui-api-automation/
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <!-- ===== Library versions (pin them, upgrade deliberately) ===== -->
-    <selenium.version>4.27.0</selenium.version>
-    <cucumber.version>7.20.1</cucumber.version>
-    <testng.version>7.10.2</testng.version>
-    <restassured.version>5.5.0</restassured.version>
-    <allure.version>2.29.0</allure.version>
-    <aspectj.version>1.9.22.1</aspectj.version>
-    <assertj.version>3.26.3</assertj.version>
-    <log4j.version>2.24.3</log4j.version>
-    <jackson.version>2.18.2</jackson.version>
-    <datafaker.version>2.4.2</datafaker.version>
+    <selenium.version>4.52.0</selenium.version>
+    <cucumber.version>7.34.9</cucumber.version>
+    <testng.version>7.12.0</testng.version>
+    <restassured.version>5.5.7</restassured.version>
+    <allure.version>2.35.6</allure.version>
+    <aspectj.version>1.9.27</aspectj.version>
+    <assertj.version>3.27.7</assertj.version>
+    <log4j.version>2.26.1</log4j.version>
+    <jackson.version>2.23.0</jackson.version>
+    <datafaker.version>2.7.0</datafaker.version>
 
     <!-- ===== Runtime defaults (all overridable with -D on the command line) ===== -->
     <env>public</env>
@@ -392,14 +392,15 @@ parabank-ui-api-automation/
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
+        <version>3.16.0</version>
       </plugin>
 
-      <!-- Surefire: runs the TestNG suite and attaches the AspectJ agent for Allure @Step -->
+      <!-- Surefire: runs the TestNG suite and attaches the AspectJ agent for Allure @Step.
+           Stay on 3.5.x: 3.6.0+ runs TestNG on the JUnit Platform and no longer reads suite XML files. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.2</version>
+        <version>3.5.6</version>
         <configuration>
           <suiteXmlFiles>
             <suiteXmlFile>src/test/resources/suites/testng.xml</suiteXmlFile>
@@ -427,9 +428,9 @@ parabank-ui-api-automation/
       <plugin>
         <groupId>io.qameta.allure</groupId>
         <artifactId>allure-maven</artifactId>
-        <version>2.15.2</version>
+        <version>2.18.0</version>
         <configuration>
-          <reportVersion>2.32.0</reportVersion>
+          <reportVersion>2.46.2</reportVersion>
           <resultsDirectory>${allure.results.directory}</resultsDirectory>
         </configuration>
       </plugin>
