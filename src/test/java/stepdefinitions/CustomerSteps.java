@@ -1,6 +1,8 @@
 package stepdefinitions;
 
 import io.cucumber.java.en.Given;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import pages.BankCustomer;
 import pages.LeftMenuComponent;
 import pages.LoginPage;
@@ -16,6 +18,8 @@ import utils.ScenarioContext;
  */
 public class CustomerSteps {
 
+    private static final Logger LOG = LogManager.getLogger(CustomerSteps.class);
+
     /** Per thread, never shared between parallel threads. */
     private static final ThreadLocal<BankCustomer> REGISTERED = new ThreadLocal<>();
 
@@ -24,9 +28,12 @@ public class CustomerSteps {
         BankCustomer customer = REGISTERED.get();
         if (customer == null) {
             customer = BankCustomer.generate();
+            LOG.info("Registering a new customer \"{}\" for this test run", customer.username());
             new RegisterPage().open().register(customer);
             new LeftMenuComponent().logOut();       // registration logs in; start the scenario logged out
             REGISTERED.set(customer);
+        } else {
+            LOG.info("Using customer \"{}\", registered earlier in this run", customer.username());
         }
         ScenarioContext.put(ScenarioContext.CUSTOMER, customer);
     }

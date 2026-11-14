@@ -64,6 +64,8 @@ mvn test -Dcucumber.filter.tags="@ui"
 mvn test -Dcucumber.filter.tags="@api"
 ```
 
+Scenarios run one after another in a single visible Chrome window, and the console shows each scenario, step and action in plain language, with a summary at the end. Add `-Dheadless=true` to hide the browser, or `-DdpThreads=2` to run 2 scenarios at a time.
+
 The target environment is the public ParaBank site by default (`env-public.properties`). For a local Docker instance run `docker run -d -p 8080:8080 parasoft/parabank`, then add `-Plocal` to the mvn command.
 
 ## Related projects

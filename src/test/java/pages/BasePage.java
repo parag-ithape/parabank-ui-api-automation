@@ -44,7 +44,7 @@ public abstract class BasePage {
     /** Opens a ParaBank page by its path, e.g. "/index.htm". */
     protected void openPath(String path) {
         String url = Config.get(Config.BASE_URL) + path;
-        log.info("Opening {}", url);
+        log.info("Open {}", url);
         driver.get(url);
     }
 

@@ -47,13 +47,14 @@ public class Actions {
         for (int attempt = 1; ; attempt++) {
             try {
                 waitClickable(by).click();
-                LOG.info("Clicked {}", by);
+                LOG.info("Click {}", Locators.nameOf(by));
                 return;
             } catch (StaleElementReferenceException | ElementClickInterceptedException e) {
                 if (attempt >= clickRetries) {
                     throw e;
                 }
-                LOG.warn("Retry {}/{} click on {} due to {}", attempt, clickRetries, by, e.getClass().getSimpleName());
+                LOG.warn("{} was not ready to click (the page was still changing), trying again ({} of {})",
+                        Locators.nameOf(by), attempt, clickRetries);
             }
         }
     }
@@ -63,14 +64,22 @@ public class Actions {
         WebElement el = waitVisible(by);
         el.clear();
         el.sendKeys(text);
-        LOG.info("Typed '{}' into {}", text, by);
+        if (text.isEmpty()) {
+            LOG.info("Leave {} empty", Locators.nameOf(by));
+        } else {
+            LOG.info("Enter \"{}\" in {}", text, Locators.nameOf(by));
+        }
     }
 
     public void typeSecret(By by, String secret) {
         WebElement el = waitVisible(by);
         el.clear();
         el.sendKeys(secret);
-        LOG.info("Typed ****** into {}", by);
+        if (secret.isEmpty()) {
+            LOG.info("Leave {} empty", Locators.nameOf(by));
+        } else {
+            LOG.info("Enter ******** in {}", Locators.nameOf(by));
+        }
     }
 
     public String text(By by) {
@@ -92,19 +101,19 @@ public class Actions {
         try {
             return driver.findElements(by).stream().anyMatch(WebElement::isDisplayed);
         } catch (StaleElementReferenceException e) {
-            LOG.debug("Element {} went stale during visibility check", by);
+            LOG.debug("{} changed while checking if it is shown", Locators.nameOf(by));
             return false;
         }
     }
 
     public void selectByText(By by, String visibleText) {
         new Select(waitVisible(by)).selectByVisibleText(visibleText);
-        LOG.info("Selected '{}' in {}", visibleText, by);
+        LOG.info("Choose \"{}\" in {}", visibleText, Locators.nameOf(by));
     }
 
     public void selectByValue(By by, String value) {
         new Select(waitVisible(by)).selectByValue(value);
-        LOG.info("Selected value '{}' in {}", value, by);
+        LOG.info("Choose option with value \"{}\" in {}", value, Locators.nameOf(by));
     }
 
     public List<String> optionTexts(By by) {
@@ -114,7 +123,7 @@ public class Actions {
     /** LAST RESORT: JavaScript click bypasses real user behaviour. Say why at the call site. */
     public void jsClick(By by) {
         ((JavascriptExecutor) driver).executeScript("arguments[0].click();", waitPresent(by));
-        LOG.info("JS-clicked {}", by);
+        LOG.info("Click {} (using JavaScript)", Locators.nameOf(by));
     }
 
     public void scrollIntoView(By by) {

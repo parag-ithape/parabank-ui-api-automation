@@ -14,6 +14,10 @@
     <maven.compiler.release>17</maven.compiler.release>
     <!-- Keeps parameter names in the bytecode, so Allure @Step titles can use {customer.username} -->
     <maven.compiler.parameters>true</maven.compiler.parameters>
+    <!-- No annotation processors are used; this also silences javac's annotation-processing notice -->
+    <maven.compiler.proc>none</maven.compiler.proc>
+    <!-- All code is in src/test. Without this, compiler 3.16 warns that the (empty) target/classes is missing -->
+    <maven.compiler.useIncrementalCompilation>false</maven.compiler.useIncrementalCompilation>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <!-- ===== Library versions (pin them, upgrade deliberately) ===== -->

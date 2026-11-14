@@ -24,6 +24,7 @@ public final class Config {
     public static final String BROWSER = "browser";
     public static final String EXECUTION_MODE = "execution.mode";
     public static final String HEADLESS = "headless";
+    public static final String BROWSER_REUSE = "browser.reuse";
     public static final String WINDOW_WIDTH = "window.width";
     public static final String WINDOW_HEIGHT = "window.height";
     public static final String GRID_URL = "grid.url";

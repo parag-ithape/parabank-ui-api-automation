@@ -42,7 +42,7 @@
 | G1 | **Business-readable tests** | Cucumber BDD: scenarios describe banking rules in plain English that a product owner can review. |
 | G2 | **Two layers, one framework** | UI (Selenium) and API (REST Assured) share config, data, context and reporting. Hybrid scenarios combine them. |
 | G3 | **Maintainability** | Strict layers (Core → Pages / API clients → Steps). Locators, messages, data and config each live in their own files. |
-| G4 | **Parallel-safe** | `ThreadLocal` driver and context. No static mutable state. A new page object for every scenario. |
+| G4 | **Sequential by default, parallel-safe when asked** | Scenarios run one after another in one browser (easy to watch and debug). `-DdpThreads=N` runs them in parallel; the `ThreadLocal` driver and context keep threads apart. No static mutable state. A new page object for every scenario. |
 | G5 | **Fast and stable** | Test data is created through the API, not by clicking. Explicit waits only (no implicit wait, no `Thread.sleep`). Browser started only for `@ui` scenarios. |
 | G6 | **Environment-agnostic** | One `baseUrl` switches between the public ParaBank site and a local/CI Docker instance. Values resolve: system property → environment variable → env file → defaults. |
 | G7 | **Rich reporting** | Allure with Gherkin steps, screenshots, page source and API request/response attachments. |
@@ -361,6 +361,8 @@ browser=chrome
 # local | grid
 execution.mode=local
 headless=false
+# true = one browser for the whole run (session cleared between scenarios); false = new browser per scenario
+browser.reuse=true
 window.width=1920
 window.height=1080
 grid.url=http://localhost:4444
@@ -435,20 +437,26 @@ String env   = Config.env();                               // public | local
 
 ## 7. Driver Management
 
-`utils/Driver.java` is the only class that creates browsers. It holds **one browser per thread** (`ThreadLocal`): with a static WebDriver, parallel scenario A would click in scenario B's browser.
+`utils/Driver.java` is the only class that creates browsers.
 
 ```java
-Driver.start();        // @Before hook of @ui scenarios: browser, headless, size, local|grid from config
+Driver.open();         // @Before hook of @ui scenarios: reuses the open browser, or starts one
 Driver.get();          // pages get the current thread's browser
 Driver.isStarted();    // hooks: is there a browser to screenshot?
-Driver.quit();         // @After hook, ALWAYS: quits and frees the thread (no dead browser for the next scenario)
+Driver.release();      // @After hook: clears the session (browser.reuse=true) or closes the browser
+Driver.quitAll();      // @AfterAll hook (and a JVM shutdown hook as safety net): closes every browser
 ```
+
+**One browser for the whole run (`browser.reuse=true`, default).** Opening a browser per scenario is slow and makes runs hard to watch. Instead the browser opens once; after each scenario its cookies, local/session storage and extra tabs are cleared, so the next scenario starts logged out, exactly like a fresh browser for ParaBank. If the browser stopped responding, `open()` starts a new one; if clearing fails, the browser is closed and the next scenario gets a new one. `browser.reuse=false` restores a fresh browser per scenario.
+
+**Per thread.** The browser is held in a `ThreadLocal`. With the default single thread that is one browser; with `-DdpThreads=N` each thread gets (and reuses) its own, so parallel scenario A never clicks in scenario B's browser.
 
 - **Browsers:** `-Dbrowser=chrome|firefox|edge` (`Driver.Browser.from(..)` gives a clear error for typos like "chorme").
 - **Where:** `execution.mode=local` or `grid` (with `grid.url`).
 - **Options:** headless, window size and page-load strategy are set inside `Driver` and nowhere else, identically for local and Grid.
 - **No driver binaries:** Selenium Manager (Selenium 4.6+) downloads the matching driver.
 - **No implicit wait:** only page-load and script timeouts are set; all waiting is explicit, in `Actions`.
+- **Quiet:** Selenium's harmless "Unable to find an exact match for CDP version" warning is hidden (no CDP features are used).
 
 ## 8. Locator Repository
 
@@ -832,12 +840,12 @@ src/test/java/stepdefinitions/           # LoginSteps, TransferSteps, TransferAp
 src/test/java/runner/                    # CucumberTestRunner.java, Hooks.java
 ```
 
-### 13.1 Runner (parallel scenarios)
+### 13.1 Runner
 ```java
 @CucumberOptions(
     features = "src/test/resources/features",
     glue = {"stepdefinitions", "runner"},
-    plugin = {"pretty",
+    plugin = {"runner.StepLogger",                                 // readable run log (section 18)
               "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",   // Allure for BDD
               "rerun:target/rerun.txt"},                           // failed scenarios, for a re-run
     monochrome = true
@@ -855,7 +863,7 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
 ```xml
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <!-- data-provider-thread-count = how many scenarios run at once. Override with -DdpThreads=N. -->
-<suite name="ParaBank" data-provider-thread-count="2">   <!-- 2 for the shared public site; CI passes -DdpThreads=4 -->
+<suite name="ParaBank" data-provider-thread-count="1">   <!-- one at a time; -DdpThreads=N for parallel -->
   <test name="Framework checks" preserve-order="true">
     <classes><class name="utils.LocatorIntegrityTest"/></classes>
   </test>
@@ -864,28 +872,22 @@ public class CucumberTestRunner extends AbstractTestNGCucumberTests {
   </test>
 </suite>
 ```
-> The default of 2 parallel scenarios protects the shared public demo site (§15.3). Raise it with `-DdpThreads=N` on a private ParaBank.
+> Scenarios run one after another by default, in one browser (§7). `-DdpThreads=N` runs N at a time, each thread with its own browser (§15).
 
 ### 13.2 Hooks: browser only for `@ui`, cleanup for everything
 ```java
 public class Hooks {
 
-    /** Every scenario: log lines carry the scenario name, so parallel output stays readable. */
-    @Before(order = 0)
-    public void nameLogLines(Scenario scenario) {
-        ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_"));
-    }
+    @Before(order = 0)                                   // every scenario: tag log-file lines with its name
+    public void nameLogLines(Scenario scenario) { ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_")); }
 
     /** API-only scenarios never open a browser, so they stay fast. */
     @Before(value = "@ui", order = 1)
-    public void startBrowser() {
-        ThreadContext.put("browser", Config.get(Config.BROWSER));
-        Driver.start();
-    }
+    public void openBrowser() { ThreadContext.put("browser", Config.get(Config.BROWSER)); Driver.open(); }
 
-    /** Attach evidence BEFORE quitting: once the browser is gone, no screenshot can be taken. */
-    @After(value = "@ui", order = 1)                 // @After hooks run highest order first
-    public void stopBrowser(Scenario scenario) {
+    /** Evidence is attached BEFORE the session is cleared: afterwards the failing page is gone. */
+    @After(value = "@ui", order = 1)                     // @After hooks run highest order first
+    public void releaseBrowser(Scenario scenario) {
         try {
             if (scenario.isFailed() && Driver.isStarted()) {
                 if (Config.getBoolean(Config.SCREENSHOT_ON_FAILURE)) {
@@ -896,16 +898,15 @@ public class Hooks {
                 AllureAttachments.browserConsoleLogs();
             }
         } finally {
-            Driver.quit();                           // always, even if attaching failed
+            Driver.release();                            // clear session (or close), even if attaching failed
         }
     }
 
-    /** Runs last for every scenario, UI or API: nothing leaks into the next scenario on this thread. */
-    @After(order = 0)
-    public void clearContext() {
-        ScenarioContext.clear();
-        ThreadContext.clearAll();
-    }
+    @After(order = 0)                                    // every scenario, last: nothing leaks to the next one
+    public void clearContext() { ScenarioContext.clear(); ThreadContext.clearAll(); }
+
+    @AfterAll                                            // after the last scenario
+    public static void closeBrowsers() { Driver.quitAll(); }
 }
 ```
 
@@ -1180,12 +1181,12 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
 
 ## 15. Parallel Execution Strategy
 
-### 15.1 How scenarios run in parallel
-- `CucumberTestRunner.scenarios()` is a `@DataProvider(parallel = true)`, so **each scenario is one parallel invocation**.
-- Pool size = `data-provider-thread-count` in `testng.xml`, overridable with `-DdpThreads=N` (`SuiteListener`).
-- Each scenario gets its own browser (`@ui` hook), its own `ScenarioContext` and new step-class instances (PicoContainer).
+### 15.1 Sequential by default, parallel on request
 
-`utils/SuiteListener.java` (registered in `META-INF/services`) applies `-DdpThreads=N` to every suite before it starts, and rejects values that are not positive whole numbers.
+- **Default: one at a time.** `data-provider-thread-count="1"` in `testng.xml`: scenarios run in order in a single browser, which is easiest to watch and debug.
+- **Parallel on request:** `-DdpThreads=N`. `CucumberTestRunner.scenarios()` is a `@DataProvider(parallel = true)`, so each scenario is one invocation on a pool of N threads. Each thread has its own browser (reused across its scenarios), its own `ScenarioContext`, and new step-class instances per scenario (PicoContainer).
+
+`utils/SuiteListener.java` (registered in `META-INF/services`) applies `-DdpThreads=N` to every suite before it starts, rejects values that are not positive whole numbers, and logs how the run is set up.
 
 ### 15.2 Thread-safety checklist (mandatory in code review)
 - [ ] No `static` WebDriver, WebElement, page or test-data fields (`static final` constants are fine).
@@ -1197,7 +1198,7 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
 
 ### 15.3 Thread-count sizing
 - Laptop: roughly **CPU cores − 1** browsers (each Chrome uses about 300–500 MB of RAM).
-- Public ParaBank site: keep it **low (2–3)**. It's a shared demo; don't load it. `testng.xml` defaults to 2.
+- Public ParaBank site: keep it **low (2–3)**. It's a shared demo; don't load it. `testng.xml` defaults to 1.
 - Local or CI container: 4 is a good default. Increase step by step. If failures rise with thread count, look for shared state or environment capacity limits, not "flaky tests".
 
 ---
@@ -1210,7 +1211,7 @@ Money is compared with `BigDecimal.isEqualByComparingTo`, never with `double`, s
   - Browser-specific flags live only in `Driver`, never in pages.
   - Avoid CDP-only features (network interception) in scenarios that must run on Firefox.
   - Prefer `id`/`name`/CSS locators; use XPath only when the DOM gives nothing better.
-- **Selenium Grid (optional, later):** `execution.mode=grid` with `grid.url` already works through `Driver.start()`. A `docker-compose` Grid file can be added when the suite needs more parallel browsers than one machine can run.
+- **Selenium Grid (optional, later):** `execution.mode=grid` with `grid.url` already works through `Driver.open()`. A `docker-compose` Grid file can be added when the suite needs more parallel browsers than one machine can run.
 
 ---
 
@@ -1284,49 +1285,37 @@ mvn allure:report     # CI: writes static HTML to target/site/allure-maven-plugi
 
 ## 18. Logging
 
-**`src/test/resources/log4j2.xml`**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Two outputs:
-   1. Console               : what you see in the IDE and CI log
-   2. target/logs/run.log   : the whole run, rolled at 20 MB (under target/, so never committed)
-  %X{scenario} and %X{browser} come from ThreadContext, set in Hooks, so parallel lines stay readable.
--->
-<Configuration status="WARN">
-  <Properties>
-    <Property name="pattern">%d{HH:mm:ss.SSS} [%t] [%X{scenario}] [%X{browser}] %-5level %c{1} - %msg%n</Property>
-    <Property name="logDir">target/logs</Property>
-  </Properties>
+The console tells the story of the run in plain language, so anyone (tester, developer, manager, client) can follow it. The log file keeps the technical detail.
 
-  <Appenders>
-    <Console name="Console" target="SYSTEM_OUT">
-      <PatternLayout pattern="${pattern}"/>
-    </Console>
-    <RollingFile name="RunFile" fileName="${logDir}/run.log" filePattern="${logDir}/run-%i.log.gz">
-      <PatternLayout pattern="${pattern}"/>
-      <Policies><SizeBasedTriggeringPolicy size="20 MB"/></Policies>
-      <DefaultRolloverStrategy max="5"/>
-    </RollingFile>
-  </Appenders>
-
-  <Loggers>
-    <!-- Keep noisy libraries quiet -->
-    <Logger name="org.openqa.selenium" level="warn"/>
-    <Logger name="io.netty" level="warn"/>
-    <Logger name="org.apache.http" level="warn"/>
-
-    <Root level="info">
-      <AppenderRef ref="Console"/>
-      <AppenderRef ref="RunFile"/>
-    </Root>
-  </Loggers>
-</Configuration>
+**Console** (lines from a real run):
+```
+23:01:18 SCENARIO  [LOG-01] Registered customer logs in
+23:01:18             Starting Chrome (visible, window 1920x1080)
+23:01:23 STEP      Given a registered customer
+23:01:25             Registering a new customer "bdd_mwgomydj_0y01" for this test run
+23:01:25             Open https://parabank.parasoft.com/parabank/register.htm
+23:01:28             Enter "Jasmine" in first name field (Register page)
+23:01:31             Enter ******** in password field (Register page)
+23:01:32             Click register button (Register page)
+23:01:33 STEP      When they log in with their username and password
+23:01:36 RESULT    PASSED   [LOG-01] Registered customer logs in  (18.1 s)
+...
+23:05:05             Leave username field (Login page) empty
+23:09:23 FAILED    in step "their accounts overview is shown": [Title of the page shown after login] expected: "X" but was: "Accounts Overview"
+23:08:35 SUMMARY   8 scenarios: 8 passed, 0 failed, 0 skipped  (total time 42.9 s)
 ```
 
-**Logging rules:** `log.info` for business steps, `log.debug` for technical detail, `log.warn` for retries and fallbacks, `log.error` for failures. **Never** log secrets. **Never** use `System.out.println`.
+| Part | Where it comes from |
+|---|---|
+| `SCENARIO`, `STEP`, `FAILED`, `RESULT`, `SUMMARY` | `runner/StepLogger.java`, a Cucumber plugin. The test-plan ID comes from the scenario's tag; a failure is reduced to one readable line. |
+| Indented action lines | `Actions` and pages. Elements are named from their locator key and page (`login.button` on `login` → "login button (Login page)", `firstName.input` → "first name field"), never by raw selector. Passwords always show as `********`. |
+| Browser lines | `Driver`: starting, reusing, session cleared, closed. |
 
----
+INFO lines show no level; warnings and errors start with `WARN:` / `ERROR:`. **`target/logs/run.log`** has every line with time in ms, thread, scenario, browser, level and class, rolled at 20 MB (under `target/`, so never committed). Both are configured in `src/test/resources/log4j2.xml`.
+
+Raw selectors still appear where they help debugging: in timeout and "element not found" errors (e.g. `waiting for visibility of login button (Login page) [By.cssSelector: input[value='Log In']]`).
+
+**Logging rules:** `log.info` for what a reader should see (actions, data used), `log.debug` for technical detail, `log.warn` for retries and fallbacks, `log.error` for failures. **Never** log secrets (use `typeSecret`). **Never** use `System.out.println`.
 
 ## 19. CI/CD (GitHub Actions)
 
@@ -1397,7 +1386,7 @@ jobs:
 |---|---|---|---|
 | 1 | Passwords or tokens committed to git | Security breach | `${SECRET}` placeholders, generated customer passwords, GitHub Secrets (§6.4, §10) |
 | 2 | Driver binaries (`chromedriver.exe`) in the repo; Windows-only paths | Breaks on browser updates and on Linux CI | Selenium Manager + classpath loading (§6.3, §7) |
-| 3 | Browser started inside a Gherkin step ("Given I launch the app") | Order-dependent failures; NPE in `@After` | `Driver.start()` in the `@ui` `@Before` hook (§13.2) |
+| 3 | Browser started inside a Gherkin step ("Given I launch the app") | Order-dependent failures; NPE in `@After` | `Driver.open()` in the `@ui` `@Before` hook (§13.2) |
 | 4 | `static WebDriver` | Parallel scenarios corrupt each other | `ThreadLocal` in `Driver` (§7) |
 | 5 | Mixed test engines / mismatched Cucumber versions | Classpath conflicts, wrong runner | TestNG only; one `${cucumber.version}` (§5) |
 | 6 | One giant locator file, or locators hard-coded in Java | Fragile, hard to maintain | One locator file per page, multi-strategy, fail fast, integrity test (§8) |

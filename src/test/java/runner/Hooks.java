@@ -1,6 +1,7 @@
 package runner;
 
 import io.cucumber.java.After;
+import io.cucumber.java.AfterAll;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
 import org.apache.logging.log4j.ThreadContext;
@@ -11,10 +12,14 @@ import utils.Config;
 import utils.Driver;
 import utils.ScenarioContext;
 
-/** Starts and stops the browser around @ui scenarios, and cleans up after every scenario. */
+/**
+ * Browser handling around @ui scenarios, and clean-up after every scenario.
+ * With browser.reuse=true (default) ONE browser serves the whole run: its session is cleared after each
+ * scenario, so the next one starts logged out, and it is closed when all scenarios are done.
+ */
 public class Hooks {
 
-    /** Log lines carry the scenario name, so parallel output stays readable. */
+    /** The log file tags each line with the scenario, so lines stay traceable. */
     @Before(order = 0)
     public void nameLogLines(Scenario scenario) {
         ThreadContext.put("scenario", scenario.getName().replaceAll("\\W+", "_"));
@@ -22,14 +27,14 @@ public class Hooks {
 
     /** API-only scenarios never open a browser, so they stay fast. */
     @Before(value = "@ui", order = 1)
-    public void startBrowser() {
+    public void openBrowser() {
         ThreadContext.put("browser", Config.get(Config.BROWSER));
-        Driver.start();
+        Driver.open();
     }
 
-    /** Evidence is attached BEFORE quitting: once the browser is gone, no screenshot can be taken. */
-    @After(value = "@ui", order = 1)
-    public void stopBrowser(Scenario scenario) {
+    /** Evidence is attached BEFORE the session is cleared: afterwards the failing page is gone. */
+    @After(value = "@ui", order = 1)                 // @After hooks run highest order first
+    public void releaseBrowser(Scenario scenario) {
         try {
             if (scenario.isFailed() && Driver.isStarted()) {
                 if (Config.getBoolean(Config.SCREENSHOT_ON_FAILURE)) {
@@ -42,7 +47,7 @@ public class Hooks {
                 AllureAttachments.browserConsoleLogs();
             }
         } finally {
-            Driver.quit();      // always, even if attaching failed
+            Driver.release();   // clears the session (or closes the browser), even if attaching failed
         }
     }
 
@@ -51,5 +56,11 @@ public class Hooks {
     public void clearContext() {
         ScenarioContext.clear();
         ThreadContext.clearAll();
+    }
+
+    /** After the last scenario: close the browser(s). */
+    @AfterAll
+    public static void closeBrowsers() {
+        Driver.quitAll();
     }
 }

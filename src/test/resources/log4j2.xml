@@ -1,35 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Two outputs:
-   1. Console               : what you see in the IDE and CI log
-   2. target/logs/run.log   : the whole run, rolled at 20 MB (under target/, so never committed)
-  %X{scenario} and %X{browser} come from ThreadContext, set in CucumberHooks, so parallel lines stay readable.
+   1. Console              : a readable story of the run, for anyone (scenarios, steps, actions, summary)
+   2. target/logs/run.log  : full technical detail (thread, scenario, class), rolled at 20 MB, never committed
+
+  Console looks like:
+    10:15:02 SCENARIO  [LOG-01] Registered customer logs in
+    10:15:02 STEP      Given a registered customer
+    10:15:03             Open https://parabank.parasoft.com/parabank/register.htm
+    10:15:03             Enter "Jamey" in first name field (Register page)
+    10:15:06 RESULT    PASSED   [LOG-01] Registered customer logs in  (3.9 s)
+  INFO lines show no level; warnings and errors start with "WARN:" / "ERROR:".
 -->
 <Configuration status="WARN">
   <Properties>
-    <Property name="pattern">%d{HH:mm:ss.SSS} [%t] [%X{scenario}] [%X{browser}] %-5level %c{1} - %msg%n</Property>
+    <!-- Scenario / step / result lines from runner.StepLogger -->
+    <Property name="storyPattern">%d{HH:mm:ss} %msg%n</Property>
+    <!-- Everything else (page actions, browser, data) is indented under its step -->
+    <Property name="actionPattern">%d{HH:mm:ss}             %replace{%level: }{^INFO: }{}%msg%n</Property>
+    <Property name="filePattern">%d{HH:mm:ss.SSS} [%t] [%X{scenario}] [%X{browser}] %-5level %c{1} - %msg%n</Property>
     <Property name="logDir">target/logs</Property>
   </Properties>
 
   <Appenders>
-    <Console name="Console" target="SYSTEM_OUT">
-      <PatternLayout pattern="${pattern}"/>
+    <Console name="StoryConsole" target="SYSTEM_OUT">
+      <PatternLayout pattern="${storyPattern}"/>
+    </Console>
+    <Console name="ActionConsole" target="SYSTEM_OUT">
+      <PatternLayout pattern="${actionPattern}"/>
     </Console>
     <RollingFile name="RunFile" fileName="${logDir}/run.log" filePattern="${logDir}/run-%i.log.gz">
-      <PatternLayout pattern="${pattern}"/>
+      <PatternLayout pattern="${filePattern}"/>
       <Policies><SizeBasedTriggeringPolicy size="20 MB"/></Policies>
       <DefaultRolloverStrategy max="5"/>
     </RollingFile>
   </Appenders>
 
   <Loggers>
+    <Logger name="runner.StepLogger" level="info" additivity="false">
+      <AppenderRef ref="StoryConsole"/>
+      <AppenderRef ref="RunFile"/>
+    </Logger>
+
     <!-- Keep noisy libraries quiet -->
     <Logger name="org.openqa.selenium" level="warn"/>
     <Logger name="io.netty" level="warn"/>
     <Logger name="org.apache.http" level="warn"/>
 
     <Root level="info">
-      <AppenderRef ref="Console"/>
+      <AppenderRef ref="ActionConsole"/>
       <AppenderRef ref="RunFile"/>
     </Root>
   </Loggers>

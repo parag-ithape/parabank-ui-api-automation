@@ -45,13 +45,15 @@ public class SuiteListener implements IAlterSuiteListener, ISuiteListener {
         }
         for (XmlSuite suite : suites) {
             suite.setDataProviderThreadCount(threads);
-            LOG.info("Suite '{}': {} scenarios in parallel", suite.getName(), threads);
+            LOG.info(threads == 1 ? "Scenarios run one at a time" : "Up to {} scenarios run at the same time", threads);
         }
     }
 
     /** Never fails the run: a reporting problem is only logged. */
     @Override
     public void onStart(ISuite suite) {
+        LOG.info("Test run on {} ({}) with {}, {} browser", Config.get(Config.BASE_URL), Config.env(),
+                Config.get(Config.BROWSER), Config.getBoolean(Config.HEADLESS) ? "headless" : "visible");
         Path results = Path.of(System.getProperty("allure.results.directory", "target/allure-results"));
         try {
             Files.createDirectories(results);
