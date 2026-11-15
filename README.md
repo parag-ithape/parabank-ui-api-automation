@@ -42,7 +42,7 @@ src/test/java/
 └── utils/              Config, browser, locators, waits, test data
 src/test/resources/
 ├── features/           Test scenarios in plain English (.feature), tagged @ui / @api
-├── locators/           One locator file per page
+├── locators.properties All locators, one commented section per page
 ├── config.properties   Browser, timeouts…  (+ env-public / env-local for the URL)
 └── testng.xml          What runs
 ```

@@ -53,7 +53,7 @@
 **Design principles**
 - **Single responsibility:** a page *describes* a screen, an API client *describes* an endpoint, a step *orchestrates and asserts*, and the core *does the plumbing*.
 - **Fail fast with clear messages:** a missing locator key, config key or data file throws a descriptive exception immediately, never a later `NullPointerException`.
-- **Convention over configuration:** the locator file name equals the page name.
+- **Convention over configuration:** every locator key starts with its page name (`login.login.button`).
 - **No magic strings in steps:** steps use page methods, API clients, `Messages.get(..)` and data objects.
 - **Declarative Gherkin:** scenarios say *what* the customer does (`When they transfer 200.00 to savings`), never *how* (`When I click the Transfer button`).
 
@@ -95,7 +95,7 @@
 ┌───────────────▼─────────────────────┐ ┌───────────▼──────────────────────────┐
 │  pages/                             │ │  api/                   (phase 3)    │
 │  LoginPage, TransferFundsPage …     │ │  AuthApi, AccountApi, TransferApi …  │
-│  locators/<page>.properties         │ │  TestDataSetup (API-built state)     │
+│  locators.properties (by page)      │ │  TestDataSetup (API-built state)     │
 └───────────────┬─────────────────────┘ └───────────┬──────────────────────────┘
 ┌───────────────▼───────────────────────────────────▼──────────────────────────┐
 │  utils/   the engine                                                         │
@@ -134,7 +134,7 @@ parabank-ui-api-automation/
 │   └── utils/                      # The engine
 │       ├── Config.java             #   settings: -D > env var > env-<env>.properties > config.properties
 │       ├── Driver.java             #   start/get/quit the browser, one per thread
-│       ├── Locators.java           #   reads locators/<page>.properties → Selenium By
+│       ├── Locators.java           #   reads a page's section of locators.properties → Selenium By
 │       ├── Messages.java           #   expected UI texts from messages_en.properties
 │       ├── Actions.java            #   click/type/select + ALL explicit waits
 │       ├── TestData.java           #   JSON test data, ${SECRET} placeholders, unique fake values
@@ -142,11 +142,11 @@ parabank-ui-api-automation/
 │       ├── Money.java              #   "$1,234.50" → BigDecimal
 │       ├── FrameworkException.java #   the one error type, with clear messages
 │       ├── SuiteListener.java      #   -DdpThreads + Allure environment/categories
-│       └── LocatorIntegrityTest.java # checks every locator file before any browser starts
+│       └── LocatorIntegrityTest.java # checks locators.properties before any browser starts
 │
 └── src/test/resources/
     ├── features/                   # *.feature files: the tests in plain English, tagged @ui / @api / @TRF-02
-    ├── locators/                   # ONE FILE PER PAGE: common.properties, login.properties …
+    ├── locators.properties         # ALL locators, one commented section per page (login.*, register.* …)
     ├── config.properties           # Defaults: browser, timeouts, headless…
     ├── env-public.properties       # baseUrl = public ParaBank site (default)
     ├── env-local.properties        # baseUrl = http://localhost:8080/parabank (Docker / CI)
@@ -468,103 +468,62 @@ Driver.quitAll();      // @AfterAll hook (and a JVM shutdown hook as safety net)
 
 ## 8. Locator Repository
 
-Locators live in **separate files, one per page or component**, not in Java code. A UI change is then a one-line edit in a `.properties` file, and every locator is validated before the suite runs.
+Locators live in **one file, `src/test/resources/locators.properties`**, never in Java code. The file has a commented section per page, and every key starts with its page name. A UI change is a one-line edit in that file, and every locator is validated before the suite runs.
 
 | Feature | Design |
 |---|---|
-| File layout | **1 file per page/component** (`locators/<page>.properties`) |
+| File layout | **One file**, one commented section per page or component; keys `<page>.<element>.<type>` |
 | Strategy | `id`, `name`, `css`, `xpath`, `linkText`, `partialLinkText`, `className`, `tagName` |
-| Missing key | `FrameworkException("Missing locator key: login.username.input")` **at page construction** |
-| Dynamic locators | `{0}`, `{1}` placeholders in the file |
-| Validation | `LocatorIntegrityTest` checks that every file and value parses (runs before the scenarios) |
+| Missing key | `FrameworkException("Missing locator key: login.username.input in locators.properties")` **at page construction** |
+| Dynamic locators | `{0}`, `{1}` placeholders in the value |
+| Validation | `LocatorIntegrityTest`: unique keys, a page section on every key, every value parses (runs before the scenarios) |
 
-### 8.1 File format: `src/test/resources/locators/login.properties`
+**Why one file:** easier to find and review every locator in one place. The usual risk of a big properties file is that a key written twice silently replaces the first; the integrity test catches exactly that, with both line numbers.
 
-> The values below show the format. Confirm each one against the live ParaBank pages while building.
+### 8.1 File format: `src/test/resources/locators.properties` (excerpt)
+
+> Confirm each value against the live ParaBank pages while building.
 
 ```properties
-# =====================================================================
-#  Page: Login (left panel on every public page)
-#  File name == page name passed to Locators.forPage("login")
-#  Format: <key>=<strategy>:<value>
-#  Strategies: id | name | css | xpath | linkText | partialLinkText | className | tagName
-#  Prefer: id > name > css > xpath (fastest and most stable first)
-#  Dynamic parts: use {0}, {1}… and pass arguments from code.
-#  NOTE: keys must not contain spaces, ':' or '='. Escape a literal backslash as '\\'.
-# =====================================================================
-username.input=name:username
-password.input=name:password
-login.button=css:input[value='Log In']
-register.link=linkText:Register
-error.message=css:#rightPanel p.error
+# -----------------------------------------------------------------------------------------------------
+#  Common: widgets shared by many pages
+# -----------------------------------------------------------------------------------------------------
+common.page.title=css:#rightPanel h1.title
+common.error.panel=css:#rightPanel .error
+common.table.row.byText=xpath://table//tr[td[normalize-space()='{0}']]
+
+# -----------------------------------------------------------------------------------------------------
+#  Login page: login panel on the left of every page while logged out (index.htm, login.htm)
+# -----------------------------------------------------------------------------------------------------
+login.username.input=name:username
+login.password.input=name:password
+login.login.button=css:input[value='Log In']
+login.register.link=linkText:Register
+login.error.message=css:#rightPanel p.error
 ```
 
-**`locators/transfer-funds.properties`**
-```properties
-amount.input=id:amount
-from.account.select=id:fromAccountId
-to.account.select=id:toAccountId
-transfer.button=css:input[value='Transfer']
-result.title=css:#showResult h1.title
-result.amount=id:amountResult
-```
-
-**`locators/common.properties`** (shared widgets)
-```properties
-page.title=css:#rightPanel h1.title
-error.panel=css:#rightPanel .error
-table.row.byText=xpath://table//tr[td[normalize-space()='{0}']]
-menu.link.byText=linkText:{0}
-```
+Rules (also in the file header): key = `<page>.<element>.<type>`; keys must not contain spaces, `:` or `=`; prefer `id > name > css > xpath`; escape a literal backslash as `\\`. A new page adds a new commented section.
 
 ### 8.2 `utils/Locators.java`
-
-`utils/Locators.java` reads one page file and converts `strategy:value` to a Selenium `By`. Each file is read once, cached, and shared read-only by all threads.
+Reads `locators.properties` once, then gives each page its own section. Shared read-only by all threads.
 
 ```java
-Locators login  = Locators.forPage("login");                 // locators/login.properties
-By button       = login.by("login.button");                  // login.button=css:input[value='Log In']
+Locators login  = Locators.forPage("login");                 // every "login.*" line
+By button       = login.by("login.button");                  // login.login.button=css:input[value='Log In']
 By row          = Locators.forPage("common").by("table.row.byText", "Savings");   // fills {0}
+Locators.pages();                                             // all page sections, for the integrity test
 ```
 
-- Splits on the **first** `:` only, because XPath values may contain more.
+- Splits each value on the **first** `:` only, because XPath values may contain more.
 - Placeholders are filled literally by `Messages.fill(..)`, **not** `MessageFormat`, which treats single quotes as escapes and would silently break XPaths such as `//td[text()='{0}']`.
-- Unknown strategy, missing `:`, empty value or missing key → `FrameworkException` naming the page and key.
+- Unknown strategy, missing `:`, empty value, missing key or a page without a section → `FrameworkException` naming the page and key.
+- Each `By` carries a readable name for logs, built from the key and page ("login button (Login page)", §18).
 
-### 8.3 Locator integrity test (catches broken locators before the scenarios run)
-```java
-// src/test/java/utils/LocatorIntegrityTest.java
-// Parses EVERY key in EVERY locators/*.properties file. No browser needed, runs in under a second.
-// Listed first in testng.xml, so a typo fails the build before any browser starts.
-// Collects ALL bad entries and reports them in one AssertJ failure, instead of stopping at the first.
-// Also fails when the folder or the file list is empty, so it can never pass vacuously.
-public class LocatorIntegrityTest {
-    @Test
-    public void allLocatorFilesAreValid() throws IOException, URISyntaxException {
-        URL dirUrl = getClass().getClassLoader().getResource("locators");
-        assertThat(dirUrl).as("'locators' folder on the test classpath").isNotNull();
-        List<Path> files;
-        try (Stream<Path> listing = Files.list(Path.of(dirUrl.toURI()))) {
-            files = listing.filter(f -> f.getFileName().toString().endsWith(".properties")).sorted().toList();
-        }
-        assertThat(files).as("locator files").isNotEmpty();
-
-        List<String> problems = new ArrayList<>();
-        for (Path file : files) {
-            String page = file.getFileName().toString().replace(".properties", "");
-            try {
-                Locators repo = Locators.forPage(page);
-                if (repo.keys().isEmpty()) problems.add(page + ": file has no locator entries");
-                for (String key : repo.keys()) {
-                    try { repo.by(key, "x", "y", "z"); }                 // throws on bad strategy/format/empty value
-                    catch (FrameworkException | IllegalArgumentException e) { problems.add(e.getMessage()); }
-                }
-            } catch (FrameworkException e) { problems.add(e.getMessage()); }
-        }
-        assertThat(problems).as("invalid locator entries").isEmpty();
-    }
-}
-```
+### 8.3 `utils/LocatorIntegrityTest.java`: catches broken locators before the scenarios run
+Runs first in `testng.xml`, without a browser, in under a second, and reports every problem at once:
+- a **duplicate key** (found by reading the lines, because `Properties` keeps only the last one), e.g. `Duplicate key "login.login.button" on lines 30 and 86`
+- a key **without a page section**
+- a value that **doesn't parse**: unknown strategy, missing `:`, empty value
 
 > **Why not `@FindBy` / PageFactory?** PageFactory can't read locators from external files. Its lazy proxies also cause `StaleElementReferenceException` when the page re-renders, and the Selenium team no longer recommends it. Using `By` plus waits on every action is more robust.
 
@@ -697,7 +656,7 @@ Bank amounts are always `BigDecimal`, never `double` (which loses cents). `Money
 1. A page **exposes business actions** (`transfer(amount, from, to)`), not raw clicks.
 2. A method that navigates **returns the next page object** (fluent chaining).
 3. Pages contain **no assertions**. They return values or state (`getResultTitle()`, `isLoaded()`), and steps assert.
-4. Locators are **private** fields resolved in the constructor from the page's locator file, so a missing key fails immediately.
+4. Locators are **private** fields resolved in the constructor from the page's section of `locators.properties`, so a missing key fails immediately.
 5. Repeated widgets (left menu, accounts table) are **components**, written once.
 6. `@Step` (Allure) goes on page methods so the report reads like a business flow.
 
@@ -1355,7 +1314,7 @@ Action versions are pinned to the current major (checkout v7, setup-java v6, upl
 ### 19.2 Quality gates
 - **Smoke must be 100% green** on every push and pull request; regression runs nightly.
 - The job fails when any scenario fails (no `failure.ignore` in CI), but the report steps still run (`if: always()`).
-- `LocatorIntegrityTest` runs first, so a broken locator file fails the build in seconds, before any browser starts.
+- `LocatorIntegrityTest` runs first, so a broken or duplicate locator fails the build in seconds, before any browser starts.
 - Optional: post pass/fail counts and the report link to Teams or Slack from a final step.
 
 ---
@@ -1369,7 +1328,7 @@ Action versions are pinned to the current major (checkout v7, setup-java v6, upl
 | 3 | Browser started inside a Gherkin step ("Given I launch the app") | Order-dependent failures; NPE in `@After` | `Driver.open()` in the `@ui` `@Before` hook (§13.2) |
 | 4 | `static WebDriver` | Parallel scenarios corrupt each other | `ThreadLocal` in `Driver` (§7) |
 | 5 | Mixed test engines / mismatched Cucumber versions | Classpath conflicts, wrong runner | TestNG only; one `${cucumber.version}` (§5) |
-| 6 | One giant locator file, or locators hard-coded in Java | Fragile, hard to maintain | One locator file per page, multi-strategy, fail fast, integrity test (§8) |
+| 6 | Locators hard-coded in Java, or an unchecked locator file where duplicates silently override | Fragile, hard to maintain | One `locators.properties` with a section per page, multi-strategy, fail fast, integrity test that rejects duplicates (§8) |
 | 7 | Expected messages hard-coded in steps | Many edits for one wording change | `messages_en.properties` (§9) |
 | 8 | Implicit waits and `Thread.sleep` | Slow and flaky | Explicit waits only, in `Actions` (§11.1) |
 | 9 | Assertions inside page objects | Pages can't be reused for negative scenarios | Assertions only in steps, with AssertJ descriptions (§12.1) |
@@ -1394,7 +1353,7 @@ Action versions are pinned to the current major (checkout v7, setup-java v6, upl
 | API clients | `<Resource>Api` | `TransferApi` |
 | Step classes | `<Feature>Steps` / `<Feature>ApiSteps` | `TransferSteps`, `TransferApiSteps` |
 | Feature files | kebab-case, one business capability | `transfer-funds.feature` |
-| Locator files | kebab-case = page name | `transfer-funds.properties` |
+| Locator sections | page name in kebab-case as key prefix, one commented section per page | `transfer-funds.amount.input` |
 | Locator keys | `<element>.<type>` | `amount.input`, `transfer.button`, `from.account.select` |
 | Message keys | `<module>.<context>.<meaning>` | `billpay.validation.payee.required` |
 | Constants | UPPER_SNAKE | `ScenarioContext.CHECKING_ACCOUNT_ID` |
@@ -1409,7 +1368,7 @@ Action versions are pinned to the current major (checkout v7, setup-java v6, upl
 7. One behaviour per scenario; steps stay thin and call pages or API clients.
 8. Money is always `BigDecimal`.
 9. Git flow: `feature/<short-desc>` → pull request → green smoke → merge.
-10. Every new page needs its locator file, `isLoaded()`, and at least one `@smoke` scenario.
+10. Every new page needs its section in `locators.properties`, `isLoaded()`, and at least one `@smoke` scenario.
 
 **Pull request checklist**
 - [ ] No hardcoded locators, messages, URLs or credentials in Java.

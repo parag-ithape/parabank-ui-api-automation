@@ -14,20 +14,26 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Reads the locators of one page from locators/&lt;page&gt;.properties and turns them into Selenium By objects.
+ * Reads ALL locators from the single file locators.properties and turns them into Selenium By objects.
+ * Each line starts with its page: "login.login.button=css:input[value='Log In']" belongs to page "login".
  *
  * <pre>
- *   Locators login = Locators.forPage("login");        // reads locators/login.properties
- *   By button = login.by("login.button");               // line: login.button=css:input[value='Log In']
+ *   Locators login = Locators.forPage("login");        // the "login.*" section of locators.properties
+ *   By button = login.by("login.button");               // line: login.login.button=css:input[value='Log In']
  *   By row = common.by("table.row.byText", "Savings");  // fills {0} in dynamic locators
  * </pre>
- * Each file is read once and shared read-only by all threads.
+ * The file is read once and shared read-only by all threads.
  */
 public final class Locators {
 
+    /** The one locator file, at the root of src/test/resources. */
+    public static final String FILE = "locators.properties";
+
+    private static final Properties ALL = load();
     private static final Map<String, Locators> CACHE = new ConcurrentHashMap<>();
 
     private final String page;
@@ -35,14 +41,15 @@ public final class Locators {
 
     private Locators(String page) {
         this.page = page;
-        String resource = "locators/" + page + ".properties";
-        try (InputStream in = Locators.class.getClassLoader().getResourceAsStream(resource)) {
-            if (in == null) {
-                throw new FrameworkException("Locator file not found: " + resource);
+        String prefix = page + ".";
+        for (String key : ALL.stringPropertyNames()) {
+            if (key.startsWith(prefix)) {
+                entries.setProperty(key.substring(prefix.length()), ALL.getProperty(key));
             }
-            entries.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            throw new FrameworkException("Cannot read locator file: " + resource, e);
+        }
+        if (entries.isEmpty()) {
+            throw new FrameworkException("No locators for page \"" + page + "\" in " + FILE
+                    + " (expected lines starting with \"" + prefix + "\")");
         }
     }
 
@@ -50,11 +57,21 @@ public final class Locators {
         return CACHE.computeIfAbsent(page, Locators::new);
     }
 
-    /** Finds the key in the page file and converts "strategy:value" to a By. Args fill {0}, {1}… */
+    /** Every page that has a section in locators.properties (the part of each key before the first '.'). */
+    public static Set<String> pages() {
+        Set<String> pages = new TreeSet<>();
+        for (String key : ALL.stringPropertyNames()) {
+            int dot = key.indexOf('.');
+            pages.add(dot > 0 ? key.substring(0, dot) : key);
+        }
+        return pages;
+    }
+
+    /** Finds the key in the page's section and converts "strategy:value" to a By. Args fill {0}, {1}… */
     public By by(String key, Object... args) {
         String raw = entries.getProperty(key);
         if (raw == null) {
-            throw new FrameworkException("Missing locator key: " + page + "." + key);
+            throw new FrameworkException("Missing locator key: " + page + "." + key + " in " + FILE);
         }
         String resolved = Messages.fill(raw, args);
         int sep = resolved.indexOf(':');                  // first ':' only, XPath may contain more
@@ -85,9 +102,22 @@ public final class Locators {
         return page;
     }
 
-    /** All keys in the file. Used by LocatorIntegrityTest. */
+    /** All keys of this page's section (without the page prefix). Used by LocatorIntegrityTest. */
     public Set<String> keys() {
         return entries.stringPropertyNames();
+    }
+
+    private static Properties load() {
+        try (InputStream in = Locators.class.getClassLoader().getResourceAsStream(FILE)) {
+            if (in == null) {
+                throw new FrameworkException("Locator file not found on the classpath: " + FILE);
+            }
+            Properties p = new Properties();
+            p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+            return p;
+        } catch (IOException e) {
+            throw new FrameworkException("Cannot read locator file: " + FILE, e);
+        }
     }
 
     /** Plain-language name of an element in logs. Falls back to the technical selector for other locators. */
