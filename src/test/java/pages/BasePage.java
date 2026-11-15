@@ -2,10 +2,13 @@ package pages;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebDriverException;
 import utils.Actions;
 import utils.Config;
 import utils.Driver;
+import utils.FrameworkException;
 import utils.Locators;
 
 /**
@@ -13,7 +16,7 @@ import utils.Locators;
  * <ul>
  *   <li>the current thread's browser (from Driver.get(), never a copied static field)</li>
  *   <li>Actions: interactions + explicit waits</li>
- *   <li>its own locator file (file name = pageName) and the shared "common" locators</li>
+ *   <li>its own section of locators.properties (section = pageName) and the shared "common" locators</li>
  * </ul>
  * Pages contain NO assertions: they return values or state, and steps assert.
  */
@@ -34,11 +37,33 @@ public abstract class BasePage {
     /** Each page defines what "loaded" means (an element unique to it). */
     public abstract boolean isLoaded();
 
-    /** Waits until isLoaded() is true, failing with the page name if it never is. */
+    /**
+     * Waits until isLoaded() is true. If it never is, fails with what the browser shows INSTEAD
+     * (page title, URL, any error message), e.g. "AccountsOverviewPage did not load. The browser shows:
+     * title "Error!", URL …/overview.htm, error "An internal error has occurred and has been logged."".
+     */
     @SuppressWarnings("unchecked")
     protected <T extends BasePage> T waitUntilLoaded() {
-        actions.waitUntil(d -> isLoaded(), getClass().getSimpleName() + " did not load");
+        try {
+            actions.waitUntil(d -> isLoaded(), getClass().getSimpleName() + " did not load");
+        } catch (TimeoutException e) {
+            throw new FrameworkException(getClass().getSimpleName() + " did not load within "
+                    + Config.get(Config.TIMEOUT_EXPLICIT) + " s. The browser shows: " + describeCurrentPage(), e);
+        }
         return (T) this;
+    }
+
+    /** Title, URL and error message of whatever page is open now. Never throws. */
+    protected String describeCurrentPage() {
+        String title = actions.visibleTexts(common.by("page.title")).stream().findFirst().orElse("(none)");
+        String error = isErrorShown() ? getErrorText() : "(none)";
+        String url;
+        try {
+            url = driver.getCurrentUrl();
+        } catch (WebDriverException e) {
+            url = "(unknown)";
+        }
+        return "title \"" + title + "\", URL " + url + ", error \"" + error + "\"";
     }
 
     /** Opens a ParaBank page by its path, e.g. "/index.htm". */
