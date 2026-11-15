@@ -1307,7 +1307,7 @@ The workflow file is the source of truth; in short:
 | Matrix | `chrome`, `firefox` (`fail-fast: false`), each its own job and report |
 | Test command | `mvn -B clean test -Plocal -Dbrowser=<matrix> -Dheadless=true -DdpThreads=2` with the default filter `not @knownIssue and not @wip` (or the tags given by hand) |
 | Reports | `mvn allure:report` (single file) + `cucumber-report.html` + `run.log`, uploaded as artifact `reports-<browser>` even when tests fail (`if: always()`) |
-| GitHub Pages | the Chrome report from `main` is published by the `publish-report` job (`actions/deploy-pages`). Requires Settings → Pages → Source: **GitHub Actions**; the job has `continue-on-error: true` so the badge isn't red before Pages is switched on |
+| GitHub Pages | the Chrome report from `main` is published by the `publish-report` job (`actions/deploy-pages`). The Pages artifact is named per attempt (`github-pages-<run_attempt>`), so **Re-run jobs** doesn't fail on two artifacts with the same name. Requires Settings → Pages → Source: **GitHub Actions**; the job has `continue-on-error: true` so the badge isn't red before Pages is switched on |
 
 Action versions are pinned to the current major (checkout v7, setup-java v6, upload-artifact v7, upload-pages-artifact v5, deploy-pages v5).
 
