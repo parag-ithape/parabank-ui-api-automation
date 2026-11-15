@@ -408,6 +408,8 @@ baseUrl=https://parabank.parasoft.com/parabank
 baseUrl=http://localhost:8080/parabank
 ```
 
+> ⚠️ **The `parasoft/parabank` Docker image starts with an empty database.** Every registration then fails with "An internal error has occurred" (server log: `user lacks privilege or object not found: SEQUENCE`). Create the database once after starting the container: `curl -X POST http://localhost:8080/parabank/services/bank/initializeDB` (answers HTTP 204). CI does this automatically (§19). Never call `initializeDB` on the public site: it resets the shared demo bank.
+
 > `baseUrl` is shared by the UI and the API layer, so switching environment changes both at once.
 
 ### 6.2 Resolution order (highest priority wins)
@@ -1342,7 +1344,7 @@ The workflow file is the source of truth; in short:
 | Triggers | push to `main`, every pull request, nightly at 20:30 UTC, and **Run workflow** by hand with a tag expression |
 | `concurrency` | a newer push to the same branch cancels the run still going |
 | Service container | `parasoft/parabank:latest` on port 8080: a private bank per run, so data never mixes with other users of the public demo |
-| Wait step | polls `/parabank/index.htm` for up to 5 minutes before testing |
+| Database step | polls `/parabank/index.htm` (up to 5 min), then `POST /services/bank/initializeDB`, then registers one throwaway customer over HTTP to prove the bank works. If that fails, ParaBank's server-log errors are shown as annotations |
 | Matrix | `chrome`, `firefox` (`fail-fast: false`), each its own job and report |
 | Test command | `mvn -B clean test -Plocal -Dbrowser=<matrix> -Dheadless=true -DdpThreads=2` with the default filter `not @knownIssue and not @wip` (or the tags given by hand) |
 | Reports | `mvn allure:report` (single file) + `cucumber-report.html` + `run.log`, uploaded as artifact `reports-<browser>` even when tests fail (`if: always()`) |
@@ -1434,6 +1436,7 @@ mvn clean test -Dcucumber.filter.tags="@api and not @ui"
 
 # Against local Docker ParaBank, Firefox, headless, 4 parallel scenarios
 docker run -d -p 8080:8080 parasoft/parabank
+curl -X POST http://localhost:8080/parabank/services/bank/initializeDB     # once: the image starts with an empty database
 mvn clean test -Plocal -Dbrowser=firefox -Dheadless=true -DdpThreads=4
 
 # One feature file
